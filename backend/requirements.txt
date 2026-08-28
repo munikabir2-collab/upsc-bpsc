@@ -1,1 +1,13 @@
+﻿fastapi
 uvicorn[standard]
+sqlalchemy
+python-dotenv
+python-jose[cryptography]
+passlib[argon2]
+argon2-cffi
+pydantic
+email-validator
+requests
+httpx
+razorpay
+groq
