@@ -6,6 +6,8 @@ import {
 } from "react-router-dom";
 
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+
 import Dashboard from "./pages/Dashboard";
 import News from "./pages/News";
 import MCQs from "./pages/MCQs";
@@ -32,6 +34,11 @@ function App() {
                 <Route
                     path="/login"
                     element={<Login />}
+                />
+
+                <Route
+                    path="/signup"
+                    element={<Signup />}
                 />
 
                 {/* Main */}
@@ -81,3 +88,4 @@ function App() {
 }
 
 export default App;
+

@@ -1,9 +1,8 @@
-
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://upsc-bpsc.onrender.com";
 
 function Signup() {
     const navigate = useNavigate();
@@ -19,10 +18,10 @@ function Signup() {
     const [success, setSuccess] = useState("");
 
     const handleChange = (e) => {
-        setForm({
-            ...form,
+        setForm((prev) => ({
+            ...prev,
             [e.target.name]: e.target.value,
-        });
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -31,17 +30,21 @@ function Signup() {
         setError("");
         setSuccess("");
 
-        if (!form.name.trim()) {
+        const name = form.name.trim();
+        const email = form.email.trim().toLowerCase();
+        const password = form.password;
+
+        if (!name) {
             setError("Please enter your name.");
             return;
         }
 
-        if (!form.email.trim()) {
+        if (!email) {
             setError("Please enter your email.");
             return;
         }
 
-        if (form.password.length < 6) {
+        if (password.length < 6) {
             setError("Password must be at least 6 characters.");
             return;
         }
@@ -49,18 +52,21 @@ function Signup() {
         setLoading(true);
 
         try {
+            console.log("Signup API:", `${API_URL}/auth/signup`);
+
             const response = await axios.post(
                 `${API_URL}/auth/signup`,
                 {
-                    name: form.name.trim(),
-                    email: form.email.trim().toLowerCase(),
-                    password: form.password,
+                    name,
+                    email,
+                    password,
                 },
                 {
                     headers: {
                         "Content-Type": "application/json",
+                        Accept: "application/json",
                     },
-                    timeout: 10000,
+                    timeout: 20000,
                 }
             );
 
@@ -78,38 +84,39 @@ function Signup() {
             });
 
             setTimeout(() => {
-                navigate("/login");
+                navigate("/login", { replace: true });
             }, 1000);
 
         } catch (err) {
             console.error("Signup error:", err);
 
             if (err.response) {
+                const status = err.response.status;
                 const detail = err.response.data?.detail;
 
                 if (Array.isArray(detail)) {
                     setError(
                         detail
-                            .map((item) => item.msg)
+                            .map((item) => item.msg || "Invalid input")
                             .join(", ")
                     );
+                } else if (typeof detail === "string") {
+                    setError(detail);
                 } else {
                     setError(
-                        detail ||
                         err.response.data?.message ||
-                        `Registration failed (${err.response.status})`
+                        `Registration failed (${status}).`
                     );
                 }
 
             } else if (err.request) {
                 setError(
-                    "Backend से connection नहीं हो रहा। Please make sure FastAPI is running on port 8000."
+                    "Server से connection नहीं हो रहा। Please check your internet connection and try again."
                 );
 
             } else {
                 setError(
-                    err.message ||
-                    "Registration failed."
+                    err.message || "Registration failed."
                 );
             }
 
@@ -175,6 +182,7 @@ function Signup() {
                             padding: "12px",
                             borderRadius: "8px",
                             marginBottom: "15px",
+                            fontSize: "14px",
                         }}
                     >
                         {error}
@@ -189,6 +197,7 @@ function Signup() {
                             padding: "12px",
                             borderRadius: "8px",
                             marginBottom: "15px",
+                            fontSize: "14px",
                         }}
                     >
                         {success}
