@@ -1,8 +1,9 @@
+
 from __future__ import annotations
 
 import logging
 import os
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import razorpay
 from dotenv import load_dotenv
@@ -25,12 +26,17 @@ logger = logging.getLogger("app.news_payment")
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 
-NEWS_DAILY_PRICE = 100  # ₹1 = 100 paise
+# ₹1 = 100 paise
+NEWS_DAILY_PRICE = 100
+
+NEWS_CURRENCY = "INR"
 
 
 # ============================================================
 # RAZORPAY CLIENT
 # ============================================================
+
+razorpay_client = None
 
 if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
     razorpay_client = razorpay.Client(
@@ -39,22 +45,69 @@ if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
             RAZORPAY_KEY_SECRET,
         )
     )
-else:
-    razorpay_client = None
 
 
 # ============================================================
-# CLIENT
+# HELPERS
 # ============================================================
 
 def _get_client():
     if razorpay_client is None:
+        logger.error(
+            "Razorpay configuration missing. "
+            "RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET not configured."
+        )
+
         raise HTTPException(
             status_code=500,
             detail="Razorpay is not configured.",
         )
 
     return razorpay_client
+
+
+def _india_today() -> date:
+    """
+    Current date in IST.
+
+    Payment access is a daily Indian-user feature,
+    so do not depend on server UTC/local timezone.
+    """
+
+    return datetime.now(
+        timezone.utc
+    ).astimezone(
+        timezone(timedelta(hours=5, minutes=30))
+    ).date()
+
+
+def _success_response(
+    payment: NewsDailyPayment,
+    message: str,
+) -> dict:
+
+    return {
+        "status": "success",
+        "message": message,
+
+        "has_access": True,
+
+        "access_active": True,
+
+        "access_date": (
+            payment.payment_date.isoformat()
+            if payment.payment_date
+            else _india_today().isoformat()
+        ),
+
+        "order_id": payment.order_id,
+
+        "payment_id": payment.payment_id,
+
+        "amount": payment.amount,
+
+        "currency": payment.currency,
+    }
 
 
 # ============================================================
@@ -66,17 +119,18 @@ def create_news_order(
     user_id: int,
 ):
     """
-    Create or reuse today's ₹1 current-affairs order.
+    Create today's ₹1 News access Razorpay order.
 
-    One NewsDailyPayment row is maintained per user/day.
+    One database payment record is maintained per
+    user per Indian calendar day.
     """
 
     client = _get_client()
 
-    today = datetime.now(timezone.utc).date()
+    today = _india_today()
 
     # --------------------------------------------------------
-    # FIND TODAY'S PAYMENT
+    # FIND TODAY'S RECORD
     # --------------------------------------------------------
 
     existing = (
@@ -96,29 +150,28 @@ def create_news_order(
         "paid",
         "verified",
     }:
-        return {
-            "status": "success",
-            "message": "Today's news access is already active.",
-            "has_access": True,
-            "order_id": existing.order_id,
-            "amount": existing.amount,
-            "currency": existing.currency,
-            "key_id": RAZORPAY_KEY_ID,
-        }
+
+        return _success_response(
+            existing,
+            "Today's news access is already active.",
+        )
 
     # --------------------------------------------------------
     # CREATE RAZORPAY ORDER
     # --------------------------------------------------------
 
     try:
+
         order = client.order.create(
             {
                 "amount": NEWS_DAILY_PRICE,
-                "currency": "INR",
+                "currency": NEWS_CURRENCY,
+
                 "receipt": (
                     f"news_{user_id}_"
                     f"{today.strftime('%Y%m%d')}"
                 ),
+
                 "notes": {
                     "user_id": str(user_id),
                     "feature": "daily_current_affairs",
@@ -128,6 +181,7 @@ def create_news_order(
         )
 
     except Exception as exc:
+
         logger.exception(
             "Failed to create Razorpay order"
         )
@@ -135,13 +189,14 @@ def create_news_order(
         raise HTTPException(
             status_code=502,
             detail=f"Unable to create Razorpay order: {exc}",
-        )
+        ) from exc
 
     order_id = order.get("id")
 
     if not order_id:
+
         logger.error(
-            "Razorpay returned invalid order: %s",
+            "Invalid Razorpay order response: %s",
             order,
         )
 
@@ -159,8 +214,10 @@ def create_news_order(
         existing.order_id = order_id
         existing.payment_id = None
         existing.signature = None
+
         existing.amount = NEWS_DAILY_PRICE
-        existing.currency = "INR"
+        existing.currency = NEWS_CURRENCY
+
         existing.status = "created"
         existing.verified_at = None
 
@@ -170,32 +227,44 @@ def create_news_order(
         return {
             "status": "success",
             "message": "Razorpay order created.",
+
             "order_id": order_id,
+
             "amount": NEWS_DAILY_PRICE,
-            "currency": "INR",
+            "currency": NEWS_CURRENCY,
+
             "key_id": RAZORPAY_KEY_ID,
+
             "has_access": False,
+            "access_active": False,
         }
 
     # --------------------------------------------------------
-    # CREATE NEW PAYMENT RECORD
+    # CREATE DATABASE RECORD
     # --------------------------------------------------------
 
     payment = NewsDailyPayment(
         user_id=user_id,
+
         order_id=order_id,
+
         payment_id=None,
         signature=None,
+
         amount=NEWS_DAILY_PRICE,
-        currency="INR",
+        currency=NEWS_CURRENCY,
+
         payment_date=today,
+
         status="created",
+
         verified_at=None,
     )
 
     db.add(payment)
 
     try:
+
         db.commit()
         db.refresh(payment)
 
@@ -203,7 +272,6 @@ def create_news_order(
 
         db.rollback()
 
-        # Another request may have created today's record.
         existing = (
             db.query(NewsDailyPayment)
             .filter(
@@ -219,24 +287,25 @@ def create_news_order(
                 "paid",
                 "verified",
             }:
-                return {
-                    "status": "success",
-                    "message": "Today's news access is already active.",
-                    "has_access": True,
-                    "order_id": existing.order_id,
-                    "amount": existing.amount,
-                    "currency": existing.currency,
-                    "key_id": RAZORPAY_KEY_ID,
-                }
+
+                return _success_response(
+                    existing,
+                    "Today's news access is already active.",
+                )
 
             return {
                 "status": "success",
                 "message": "Razorpay order already exists.",
+
                 "order_id": existing.order_id,
+
                 "amount": existing.amount,
                 "currency": existing.currency,
+
                 "key_id": RAZORPAY_KEY_ID,
+
                 "has_access": False,
+                "access_active": False,
             }
 
         raise
@@ -248,11 +317,16 @@ def create_news_order(
     return {
         "status": "success",
         "message": "Razorpay order created.",
+
         "order_id": order_id,
+
         "amount": NEWS_DAILY_PRICE,
-        "currency": "INR",
+        "currency": NEWS_CURRENCY,
+
         "key_id": RAZORPAY_KEY_ID,
+
         "has_access": False,
+        "access_active": False,
     }
 
 
@@ -270,6 +344,44 @@ def verify_news_payment(
 
     client = _get_client()
 
+    # --------------------------------------------------------
+    # CLEAN INPUT
+    # --------------------------------------------------------
+
+    razorpay_order_id = (
+        str(razorpay_order_id or "").strip()
+    )
+
+    razorpay_payment_id = (
+        str(razorpay_payment_id or "").strip()
+    )
+
+    razorpay_signature = (
+        str(razorpay_signature or "").strip()
+    )
+
+    if not razorpay_order_id:
+        raise HTTPException(
+            status_code=422,
+            detail="razorpay_order_id is required.",
+        )
+
+    if not razorpay_payment_id:
+        raise HTTPException(
+            status_code=422,
+            detail="razorpay_payment_id is required.",
+        )
+
+    if not razorpay_signature:
+        raise HTTPException(
+            status_code=422,
+            detail="razorpay_signature is required.",
+        )
+
+    # --------------------------------------------------------
+    # FIND ORDER
+    # --------------------------------------------------------
+
     payment = (
         db.query(NewsDailyPayment)
         .filter(
@@ -280,27 +392,28 @@ def verify_news_payment(
     )
 
     if not payment:
+
         raise HTTPException(
             status_code=404,
             detail="News payment order not found.",
         )
 
     # --------------------------------------------------------
-    # ALREADY PAID
+    # ALREADY VERIFIED
     # --------------------------------------------------------
 
     if payment.status in {
         "paid",
         "verified",
     }:
-        return {
-            "status": "success",
-            "message": "News access is already active.",
-            "access_date": payment.payment_date.isoformat(),
-        }
+
+        return _success_response(
+            payment,
+            "News access is already active.",
+        )
 
     # --------------------------------------------------------
-    # VERIFY SIGNATURE
+    # VERIFY RAZORPAY SIGNATURE
     # --------------------------------------------------------
 
     try:
@@ -313,33 +426,79 @@ def verify_news_payment(
             }
         )
 
-    except Exception:
+    except Exception as exc:
+
+        logger.warning(
+            "Invalid Razorpay signature | "
+            "user=%s order=%s payment=%s error=%s",
+            user_id,
+            razorpay_order_id,
+            razorpay_payment_id,
+            exc,
+        )
 
         payment.status = "failed"
 
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
 
         raise HTTPException(
             status_code=400,
             detail="Invalid Razorpay payment signature.",
-        )
+        ) from exc
 
     # --------------------------------------------------------
-    # MARK PAID
+    # VERIFY ORDER/PAYMENT
     # --------------------------------------------------------
 
     payment.payment_id = razorpay_payment_id
     payment.signature = razorpay_signature
+
     payment.status = "paid"
-    payment.verified_at = datetime.now(timezone.utc)
 
-    db.commit()
+    payment.verified_at = datetime.now(
+        timezone.utc
+    )
 
-    return {
-        "status": "success",
-        "message": "News access activated for today.",
-        "access_date": payment.payment_date.isoformat(),
-    }
+    try:
+
+        db.commit()
+        db.refresh(payment)
+
+    except Exception as exc:
+
+        db.rollback()
+
+        logger.exception(
+            "Failed to save verified news payment | "
+            "user=%s order=%s",
+            user_id,
+            razorpay_order_id,
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Payment verified but access could not be saved.",
+        ) from exc
+
+    # --------------------------------------------------------
+    # SUCCESS
+    # --------------------------------------------------------
+
+    logger.info(
+        "News payment verified successfully | "
+        "user=%s order=%s payment=%s",
+        user_id,
+        razorpay_order_id,
+        razorpay_payment_id,
+    )
+
+    return _success_response(
+        payment,
+        "News access activated for today.",
+    )
 
 
 # ============================================================
@@ -351,15 +510,23 @@ def has_news_access_today(
     user_id: int,
 ) -> bool:
 
-    today = date.today()
+    # IMPORTANT:
+    # Use same IST date logic used during order creation.
+
+    today = _india_today()
 
     payment = (
         db.query(NewsDailyPayment)
         .filter(
             NewsDailyPayment.user_id == user_id,
+
             NewsDailyPayment.payment_date == today,
+
             NewsDailyPayment.status.in_(
-                ["paid", "verified"]
+                [
+                    "paid",
+                    "verified",
+                ]
             ),
         )
         .first()
@@ -385,11 +552,22 @@ def require_news_access(
 
     raise HTTPException(
         status_code=402,
+
         detail={
             "code": "NEWS_PAYMENT_REQUIRED",
-            "message": "Today's News access requires ₹1 payment.",
+
+            "message": (
+                "Today's News access "
+                "requires ₹1 payment."
+            ),
+
             "amount": 1,
+
             "currency": "INR",
-            "payment_endpoint": "/news/payment/create-order",
+
+            "payment_endpoint": (
+                "/news/payment/create-order"
+            ),
         },
     )
+
