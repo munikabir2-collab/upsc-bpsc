@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import logging
@@ -6,49 +7,77 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import razorpay
-
+from dotenv import load_dotenv
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.writing_subscription import WritingSubscription
+from app.models.writing_subscription import (
+    WritingSubscription,
+)
 
 
-logger = logging.getLogger("app.writing_payment_service")
+# ============================================================
+# ENVIRONMENT
+# ============================================================
+
+load_dotenv()
 
 
-# ============================================================================
-# WRITING SUBSCRIPTION PLAN
-# ============================================================================
+# ============================================================
+# LOGGER
+# ============================================================
+
+logger = logging.getLogger(
+    "app.writing_payment_service"
+)
+
+
+# ============================================================
+# WRITING PLAN
+# ============================================================
 
 WRITING_PLAN = {
     "plan": "weekly",
     "name": "Weekly Writing Plan",
+
+    # Rupees
     "amount": 39,
+
+    # Paise
     "amount_paise": 3900,
+
     "duration_days": 7,
+
     "answer_limit": 10,
+
     "currency": "INR",
 }
 
 
-# ============================================================================
+# ============================================================
 # RAZORPAY CONFIG
-# ============================================================================
+# ============================================================
 
-RAZORPAY_KEY_ID = os.getenv(
-    "RAZORPAY_KEY_ID",
-    "",
-).strip()
+RAZORPAY_KEY_ID = (
+    os.getenv(
+        "RAZORPAY_KEY_ID",
+        "",
+    )
+    .strip()
+)
 
-RAZORPAY_KEY_SECRET = os.getenv(
-    "RAZORPAY_KEY_SECRET",
-    "",
-).strip()
+RAZORPAY_KEY_SECRET = (
+    os.getenv(
+        "RAZORPAY_KEY_SECRET",
+        "",
+    )
+    .strip()
+)
 
 
-# ============================================================================
+# ============================================================
 # RAZORPAY CLIENT
-# ============================================================================
+# ============================================================
 
 def get_razorpay_client():
     """
@@ -56,15 +85,27 @@ def get_razorpay_client():
     """
 
     if not RAZORPAY_KEY_ID:
+        logger.error(
+            "RAZORPAY_KEY_ID is missing."
+        )
+
         raise HTTPException(
             status_code=500,
-            detail="RAZORPAY_KEY_ID is not configured.",
+            detail=(
+                "RAZORPAY_KEY_ID is not configured."
+            ),
         )
 
     if not RAZORPAY_KEY_SECRET:
+        logger.error(
+            "RAZORPAY_KEY_SECRET is missing."
+        )
+
         raise HTTPException(
             status_code=500,
-            detail="RAZORPAY_KEY_SECRET is not configured.",
+            detail=(
+                "RAZORPAY_KEY_SECRET is not configured."
+            ),
         )
 
     return razorpay.Client(
@@ -75,15 +116,15 @@ def get_razorpay_client():
     )
 
 
-# ============================================================================
+# ============================================================
 # DATETIME HELPERS
-# ============================================================================
+# ============================================================
 
 def _as_utc(
     value: Optional[datetime],
 ) -> Optional[datetime]:
     """
-    Convert datetime to timezone-aware UTC datetime.
+    Convert datetime to timezone-aware UTC.
     """
 
     if value is None:
@@ -101,22 +142,27 @@ def _as_utc(
 
 def _now_utc() -> datetime:
     """
-    Return current UTC datetime.
+    Current UTC datetime.
     """
 
-    return datetime.now(timezone.utc)
+    return datetime.now(
+        timezone.utc
+    )
 
 
-# ============================================================================
+# ============================================================
 # EXPIRE SUBSCRIPTION
-# ============================================================================
+# ============================================================
 
 def _expire_if_needed(
     db: Session,
-    subscription: Optional[WritingSubscription],
+    subscription: Optional[
+        WritingSubscription
+    ],
 ):
     """
-    Automatically expire a subscription when expires_at is reached.
+    Automatically expire subscription
+    when expires_at is reached.
     """
 
     if not subscription:
@@ -135,8 +181,13 @@ def _expire_if_needed(
     ):
         subscription.is_active = False
 
-        if subscription.payment_status == "paid":
-            subscription.payment_status = "expired"
+        if subscription.payment_status in {
+            "paid",
+            "free",
+        }:
+            subscription.payment_status = (
+                "expired"
+            )
 
         try:
             db.commit()
@@ -144,6 +195,7 @@ def _expire_if_needed(
 
         except Exception:
             db.rollback()
+
             logger.exception(
                 "Failed to expire Writing subscription | "
                 "subscription_id=%s",
@@ -153,9 +205,9 @@ def _expire_if_needed(
     return subscription
 
 
-# ============================================================================
+# ============================================================
 # GET LATEST SUBSCRIPTION
-# ============================================================================
+# ============================================================
 
 def get_latest_subscription(
     db: Session,
@@ -168,7 +220,8 @@ def get_latest_subscription(
     subscription = (
         db.query(WritingSubscription)
         .filter(
-            WritingSubscription.user_id == user_id
+            WritingSubscription.user_id
+            == user_id
         )
         .order_by(
             WritingSubscription.id.desc()
@@ -182,28 +235,25 @@ def get_latest_subscription(
     )
 
 
-# ============================================================================
+# ============================================================
 # ACTIVE SUBSCRIPTION CHECK
-# ============================================================================
+# ============================================================
 
 def _is_subscription_active(
-    subscription: Optional[WritingSubscription],
+    subscription: Optional[
+        WritingSubscription
+    ],
 ) -> bool:
     """
-    Internal authoritative active subscription check.
-
-    Requirements:
-    - subscription exists
-    - is_active=True
-    - payment_status=paid
-    - expires_at exists
-    - expires_at is in future
+    Authoritative active subscription check.
     """
 
     if not subscription:
         return False
 
-    if not bool(subscription.is_active):
+    if not bool(
+        subscription.is_active
+    ):
         return False
 
     if subscription.payment_status != "paid":
@@ -219,37 +269,59 @@ def _is_subscription_active(
     return expires_at > _now_utc()
 
 
-# ============================================================================
+# ============================================================
 # SERIALIZE SUBSCRIPTION
-# ============================================================================
+# ============================================================
 
 def _serialize_subscription(
-    subscription: Optional[WritingSubscription],
+    subscription: Optional[
+        WritingSubscription
+    ],
 ):
     """
-    Convert subscription to frontend-friendly JSON.
+    Convert subscription into frontend JSON.
     """
 
     if not subscription:
         return {
             "has_subscription": False,
+
             "is_active": False,
+
             "plan": None,
+
             "name": WRITING_PLAN["name"],
+
             "amount": None,
-            "currency": WRITING_PLAN["currency"],
+
+            "currency": WRITING_PLAN[
+                "currency"
+            ],
+
             "duration_days": 0,
+
             "answer_limit": 0,
+
             "total_answers": 0,
+
             "answers_used": 0,
+
             "used_answers": 0,
+
             "remaining_answers": 0,
+
             "starts_at": None,
+
             "expires_at": None,
+
             "payment_status": None,
+
             "razorpay_order_id": None,
+
             "razorpay_payment_id": None,
+
             "can_submit": False,
+
             "can_generate_model_answer": False,
         }
 
@@ -259,8 +331,14 @@ def _serialize_subscription(
 
     remaining_answers = max(
         0,
-        int(subscription.answer_limit or 0)
-        - int(subscription.answers_used or 0),
+        int(
+            subscription.answer_limit
+            or 0
+        )
+        - int(
+            subscription.answers_used
+            or 0
+        ),
     )
 
     return {
@@ -274,19 +352,33 @@ def _serialize_subscription(
 
         "amount": subscription.amount,
 
-        "currency": WRITING_PLAN["currency"],
+        "currency": WRITING_PLAN[
+            "currency"
+        ],
 
-        "duration_days": subscription.duration_days,
+        "duration_days": (
+            subscription.duration_days
+        ),
 
-        "answer_limit": subscription.answer_limit,
+        "answer_limit": (
+            subscription.answer_limit
+        ),
 
-        "total_answers": subscription.answer_limit,
+        "total_answers": (
+            subscription.answer_limit
+        ),
 
-        "answers_used": subscription.answers_used,
+        "answers_used": (
+            subscription.answers_used
+        ),
 
-        "used_answers": subscription.answers_used,
+        "used_answers": (
+            subscription.answers_used
+        ),
 
-        "remaining_answers": remaining_answers,
+        "remaining_answers": (
+            remaining_answers
+        ),
 
         "starts_at": (
             subscription.starts_at.isoformat()
@@ -321,47 +413,46 @@ def _serialize_subscription(
             and remaining_answers > 0
         ),
 
-        "can_generate_model_answer": is_active,
+        "can_generate_model_answer": (
+            is_active
+        ),
     }
 
 
-# ============================================================================
+# ============================================================
 # SUBSCRIPTION STATUS
-# ============================================================================
+# ============================================================
 
 def get_subscription_status(
     db: Session,
     user_id: int,
 ):
     """
-    Get current Writing subscription status.
+    Return current Writing subscription.
     """
 
-    subscription = get_latest_subscription(
-        db=db,
-        user_id=user_id,
-    )
-
-    if not subscription:
-        return _serialize_subscription(
-            None
+    subscription = (
+        get_latest_subscription(
+            db=db,
+            user_id=user_id,
         )
+    )
 
     return _serialize_subscription(
         subscription
     )
 
 
-# ============================================================================
+# ============================================================
 # COMPATIBILITY ALIAS
-# ============================================================================
+# ============================================================
 
 def get_writing_subscription(
     db: Session,
     user_id: int,
 ):
     """
-    Backward-compatible function used by writing_routes.py.
+    Backward-compatible alias.
     """
 
     return get_subscription_status(
@@ -370,66 +461,57 @@ def get_writing_subscription(
     )
 
 
-# ============================================================================
-# REQUIRE ACTIVE WRITING SUBSCRIPTION
-# ============================================================================
-# ============================================================================
-# REQUIRE ACTIVE WRITING SUBSCRIPTION
-# ============================================================================
+# ============================================================
+# REQUIRE ACTIVE SUBSCRIPTION
+# ============================================================
 
 def require_writing_subscription(
     db: Session,
     user_id: int,
 ):
     """
-    Require an active Writing subscription.
+    Require active Writing access.
 
-    Supported plans:
-        - free_trial : 1 day / 10 answers
-        - paid weekly: 7 days / 10 answers
-
-    This function does NOT check answer quota.
+    Allowed:
+        free_trial + free
+        paid + active
     """
 
-    subscription = get_latest_subscription(
-        db=db,
-        user_id=user_id,
+    subscription = (
+        get_latest_subscription(
+            db=db,
+            user_id=user_id,
+        )
     )
-
-    # ------------------------------------------------------------------------
-    # No subscription
-    # ------------------------------------------------------------------------
 
     if not subscription:
         raise HTTPException(
             status_code=403,
             detail={
-                "code": "WRITING_SUBSCRIPTION_REQUIRED",
-                "message": (
-                    "Your free Writing trial has ended. "
-                    "Please purchase the ₹39 Weekly Writing Plan."
+                "code": (
+                    "WRITING_SUBSCRIPTION_REQUIRED"
                 ),
+
+                "message": (
+                    "Your free Writing trial has "
+                    "ended. Please purchase the "
+                    "₹39 Weekly Writing Plan."
+                ),
+
                 "plan": WRITING_PLAN,
             },
         )
 
-    # ------------------------------------------------------------------------
-    # PAYMENT / PLAN STATUS
-    # ------------------------------------------------------------------------
+    payment_status = str(
+        subscription.payment_status
+        or ""
+    ).strip().lower()
 
-    payment_status = (
-        str(subscription.payment_status or "")
-        .strip()
-        .lower()
-    )
+    plan = str(
+        subscription.plan
+        or ""
+    ).strip().lower()
 
-    plan = (
-        str(subscription.plan or "")
-        .strip()
-        .lower()
-    )
-
-    # Only these two are allowed to access Writing.
     allowed_access = (
         payment_status == "paid"
         or (
@@ -442,20 +524,27 @@ def require_writing_subscription(
         raise HTTPException(
             status_code=403,
             detail={
-                "code": "WRITING_PAYMENT_REQUIRED",
-                "message": (
-                    "Your Writing access is not active. "
-                    "Please purchase the ₹39 Weekly Writing Plan."
+                "code": (
+                    "WRITING_PAYMENT_REQUIRED"
                 ),
-                "payment_status": subscription.payment_status,
+
+                "message": (
+                    "Your Writing access is not "
+                    "active. Please purchase the "
+                    "₹39 Weekly Writing Plan."
+                ),
+
+                "payment_status": (
+                    subscription.payment_status
+                ),
+
                 "plan": subscription.plan,
-                "subscription_plan": WRITING_PLAN,
+
+                "subscription_plan": (
+                    WRITING_PLAN
+                ),
             },
         )
-
-    # ------------------------------------------------------------------------
-    # TIME
-    # ------------------------------------------------------------------------
 
     now = _now_utc()
 
@@ -463,34 +552,43 @@ def require_writing_subscription(
         subscription.expires_at
     )
 
-    # ------------------------------------------------------------------------
-    # EXPIRED / INACTIVE
-    # ------------------------------------------------------------------------
-
     if (
-        not bool(subscription.is_active)
+        not bool(
+            subscription.is_active
+        )
         or not expires_at
         or expires_at <= now
     ):
         subscription.is_active = False
 
-        if payment_status in {"paid", "free"}:
-            subscription.payment_status = "expired"
+        if payment_status in {
+            "paid",
+            "free",
+        }:
+            subscription.payment_status = (
+                "expired"
+            )
 
         try:
             db.commit()
+
         except Exception:
             db.rollback()
 
         raise HTTPException(
             status_code=403,
             detail={
-                "code": "WRITING_SUBSCRIPTION_EXPIRED",
+                "code": (
+                    "WRITING_SUBSCRIPTION_EXPIRED"
+                ),
+
                 "message": (
-                    "Your Writing free trial/subscription "
-                    "has expired. Please purchase the ₹39 "
+                    "Your Writing free trial/"
+                    "subscription has expired. "
+                    "Please purchase the ₹39 "
                     "Weekly Writing Plan."
                 ),
+
                 "plan": WRITING_PLAN,
             },
         )
@@ -498,62 +596,75 @@ def require_writing_subscription(
     return subscription
 
 
-# ============================================================================
-# REQUIRE WRITING ACCESS + ANSWER QUOTA
-# ============================================================================
+# ============================================================
+# REQUIRE WRITING ACCESS + QUOTA
+# ============================================================
 
 def require_writing_access(
     db: Session,
     user_id: int,
 ):
     """
-    Require active Writing access:
-        1. Free trial OR paid subscription
-        2. At least one remaining answer submission
+    Require active Writing subscription
+    and at least one remaining answer.
     """
 
-    subscription = require_writing_subscription(
-        db=db,
-        user_id=user_id,
+    subscription = (
+        require_writing_subscription(
+            db=db,
+            user_id=user_id,
+        )
     )
 
     answers_used = int(
-        subscription.answers_used or 0
+        subscription.answers_used
+        or 0
     )
 
     answer_limit = int(
-        subscription.answer_limit or 0
+        subscription.answer_limit
+        or 0
     )
 
     if answers_used >= answer_limit:
         raise HTTPException(
             status_code=403,
             detail={
-                "code": "WRITING_ANSWERS_EXHAUSTED",
-                "message": (
-                    f"You have used all {answer_limit} "
-                    "answer submissions. "
-                    "Please purchase the ₹39 Weekly Writing Plan."
+                "code": (
+                    "WRITING_ANSWERS_EXHAUSTED"
                 ),
+
+                "message": (
+                    f"You have used all "
+                    f"{answer_limit} answer "
+                    "submissions. Please "
+                    "purchase the ₹39 Weekly "
+                    "Writing Plan."
+                ),
+
                 "remaining_answers": 0,
+
                 "answer_limit": answer_limit,
+
                 "answers_used": answers_used,
             },
         )
 
     return subscription
-# ============================================================================
-# REQUIRE MODEL ANSWER ACCESS
-# ============================================================================
+
+
+# ============================================================
+# MODEL ANSWER ACCESS
+# ============================================================
 
 def require_model_answer_access(
     db: Session,
     user_id: int,
 ):
     """
-    Model Answer requires an active paid subscription.
+    Model Answer requires active Writing access.
 
-    Answer quota is NOT consumed.
+    Model Answer does NOT consume quota.
     """
 
     return require_writing_subscription(
@@ -562,44 +673,51 @@ def require_model_answer_access(
     )
 
 
-# ============================================================================
+# ============================================================
 # CONSUME ONE ANSWER
-# ============================================================================
+# ============================================================
 
 def consume_writing_answer(
     db: Session,
     user_id: int,
 ):
     """
-    Consume exactly ONE answer submission.
+    Consume exactly one answer submission.
 
-    IMPORTANT:
-    Call only AFTER successful evaluation and save.
+    Call this only after successful
+    evaluation and database save.
     """
 
-    subscription = require_writing_access(
-        db=db,
-        user_id=user_id,
+    subscription = (
+        require_writing_access(
+            db=db,
+            user_id=user_id,
+        )
     )
 
     current_used = int(
-        subscription.answers_used or 0
+        subscription.answers_used
+        or 0
     )
 
     answer_limit = int(
-        subscription.answer_limit or 0
+        subscription.answer_limit
+        or 0
     )
 
-    # Defensive protection
     if current_used >= answer_limit:
         raise HTTPException(
             status_code=403,
             detail={
-                "code": "WRITING_ANSWERS_EXHAUSTED",
-                "message": (
-                    "All Writing answer submissions "
-                    "have been used."
+                "code": (
+                    "WRITING_ANSWERS_EXHAUSTED"
                 ),
+
+                "message": (
+                    "All Writing answer "
+                    "submissions have been used."
+                ),
+
                 "remaining_answers": 0,
             },
         )
@@ -616,30 +734,35 @@ def consume_writing_answer(
         db.rollback()
 
         logger.exception(
-            "Failed to consume Writing answer | user_id=%s",
+            "Failed to consume Writing answer | "
+            "user_id=%s",
             user_id,
         )
 
         raise HTTPException(
             status_code=500,
-            detail="Unable to update Writing answer quota.",
+            detail=(
+                "Unable to update Writing "
+                "answer quota."
+            ),
         ) from exc
 
     return subscription
 
 
-# ============================================================================
-# CREATE RAZORPAY ORDER
-# ============================================================================
+# ============================================================
+# CREATE WRITING RAZORPAY ORDER
+# ============================================================
 
 def create_writing_order(
     db: Session,
     user_id: int,
 ):
     """
-    Create ₹39 Razorpay order for Weekly Writing Plan.
+    Create ₹39 Razorpay order.
     """
 
+    # Keep DB parameter for API compatibility.
     _ = db
 
     client = get_razorpay_client()
@@ -704,6 +827,14 @@ def create_writing_order(
             ),
         ) from exc
 
+    order_id = order.get("id")
+
+    if not order_id:
+        raise HTTPException(
+            status_code=502,
+            detail="Invalid Razorpay order response.",
+        )
+
     return {
         "success": True,
 
@@ -713,15 +844,25 @@ def create_writing_order(
             RAZORPAY_KEY_ID
         ),
 
-        "order_id": order["id"],
+        "order_id": order_id,
 
-        "amount": order["amount"],
+        "amount": order.get(
+            "amount",
+            WRITING_PLAN["amount_paise"],
+        ),
 
-        "currency": order["currency"],
+        "currency": order.get(
+            "currency",
+            WRITING_PLAN["currency"],
+        ),
 
-        "plan": WRITING_PLAN["plan"],
+        "plan": WRITING_PLAN[
+            "plan"
+        ],
 
-        "name": WRITING_PLAN["name"],
+        "name": WRITING_PLAN[
+            "name"
+        ],
 
         "duration_days": WRITING_PLAN[
             "duration_days"
@@ -733,9 +874,9 @@ def create_writing_order(
     }
 
 
-# ============================================================================
-# VERIFY RAZORPAY PAYMENT
-# ============================================================================
+# ============================================================
+# VERIFY WRITING PAYMENT
+# ============================================================
 
 def verify_writing_payment(
     db: Session,
@@ -745,48 +886,76 @@ def verify_writing_payment(
     razorpay_signature: str,
 ):
     """
-    Verify Razorpay payment and activate Writing subscription.
+    Secure Razorpay verification.
+
+    Verification:
+
+        Signature
+        ↓
+        Order
+        ↓
+        Amount
+        ↓
+        Currency
+        ↓
+        User
+        ↓
+        Plan
+        ↓
+        Payment
+        ↓
+        Captured
+        ↓
+        Idempotency
+        ↓
+        Subscription
     """
 
-    razorpay_order_id = (
+    razorpay_order_id = str(
         razorpay_order_id or ""
     ).strip()
 
-    razorpay_payment_id = (
+    razorpay_payment_id = str(
         razorpay_payment_id or ""
     ).strip()
 
-    razorpay_signature = (
+    razorpay_signature = str(
         razorpay_signature or ""
     ).strip()
 
-    # ------------------------------------------------------------------------
-    # Input validation
-    # ------------------------------------------------------------------------
+    # --------------------------------------------------------
+    # VALIDATION
+    # --------------------------------------------------------
 
     if not razorpay_order_id:
         raise HTTPException(
             status_code=400,
-            detail="razorpay_order_id is required.",
+            detail=(
+                "razorpay_order_id is required."
+            ),
         )
 
     if not razorpay_payment_id:
         raise HTTPException(
             status_code=400,
-            detail="razorpay_payment_id is required.",
+            detail=(
+                "razorpay_payment_id is required."
+            ),
         )
 
     if not razorpay_signature:
         raise HTTPException(
             status_code=400,
-            detail="razorpay_signature is required.",
+            detail=(
+                "razorpay_signature is required."
+            ),
         )
 
     client = get_razorpay_client()
 
-    # =========================================================================
-    # VERIFY PAYMENT SIGNATURE
-    # =========================================================================
+    # ========================================================
+    # VERIFY SIGNATURE
+    # ========================================================
 
     try:
         client.utility.verify_payment_signature(
@@ -803,29 +972,32 @@ def verify_writing_payment(
         )
 
     except Exception as exc:
-        logger.exception(
-            "Writing payment signature verification failed | "
-            "user_id=%s",
+        logger.warning(
+            "Writing payment signature verification "
+            "failed | user=%s order=%s",
             user_id,
+            razorpay_order_id,
         )
 
         raise HTTPException(
             status_code=400,
-            detail="Invalid Razorpay payment signature.",
+            detail=(
+                "Invalid Razorpay payment signature."
+            ),
         ) from exc
 
-    # =========================================================================
-    # FETCH RAZORPAY ORDER
-    # =========================================================================
+    # ========================================================
+    # FETCH ORDER
+    # ========================================================
 
     try:
         order = client.order.fetch(
             razorpay_order_id
         )
 
-        # ---------------------------------------------------------------------
-        # Amount
-        # ---------------------------------------------------------------------
+        # ----------------------------------------------------
+        # AMOUNT
+        # ----------------------------------------------------
 
         order_amount = int(
             order.get("amount", 0)
@@ -833,7 +1005,9 @@ def verify_writing_payment(
 
         if (
             order_amount
-            != WRITING_PLAN["amount_paise"]
+            != WRITING_PLAN[
+                "amount_paise"
+            ]
         ):
             raise HTTPException(
                 status_code=400,
@@ -843,9 +1017,9 @@ def verify_writing_payment(
                 ),
             )
 
-        # ---------------------------------------------------------------------
-        # Currency
-        # ---------------------------------------------------------------------
+        # ----------------------------------------------------
+        # CURRENCY
+        # ----------------------------------------------------
 
         order_currency = order.get(
             "currency"
@@ -853,18 +1027,22 @@ def verify_writing_payment(
 
         if (
             order_currency
-            != WRITING_PLAN["currency"]
+            != WRITING_PLAN[
+                "currency"
+            ]
         ):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid payment currency.",
             )
 
-        # ---------------------------------------------------------------------
-        # Order notes
-        # ---------------------------------------------------------------------
+        # ----------------------------------------------------
+        # NOTES
+        # ----------------------------------------------------
 
-        notes = order.get("notes") or {}
+        notes = order.get(
+            "notes"
+        ) or {}
 
         order_user_id = notes.get(
             "user_id"
@@ -890,7 +1068,9 @@ def verify_writing_payment(
         if (
             order_plan is not None
             and order_plan
-            != WRITING_PLAN["plan"]
+            != WRITING_PLAN[
+                "plan"
+            ]
         ):
             raise HTTPException(
                 status_code=400,
@@ -900,13 +1080,28 @@ def verify_writing_payment(
                 ),
             )
 
+        product = notes.get(
+            "product"
+        )
+
+        if (
+            product is not None
+            and product != "writing"
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Invalid Writing payment product."
+                ),
+            )
+
     except HTTPException:
         raise
 
     except Exception as exc:
         logger.exception(
-            "Unable to verify Razorpay order | "
-            "order_id=%s",
+            "Unable to verify Writing Razorpay order | "
+            "order=%s",
             razorpay_order_id,
         )
 
@@ -918,9 +1113,9 @@ def verify_writing_payment(
             ),
         ) from exc
 
-    # =========================================================================
-    # CHECK PAYMENT STATUS FROM RAZORPAY
-    # =========================================================================
+    # ========================================================
+    # FETCH PAYMENT
+    # ========================================================
 
     try:
         payment = client.payment.fetch(
@@ -943,6 +1138,10 @@ def verify_writing_payment(
             payment.get("currency")
         )
 
+        # ----------------------------------------------------
+        # ORDER RELATION
+        # ----------------------------------------------------
+
         if (
             payment_order_id
             and payment_order_id
@@ -956,23 +1155,39 @@ def verify_writing_payment(
                 ),
             )
 
+        # ----------------------------------------------------
+        # AMOUNT
+        # ----------------------------------------------------
+
         if (
             payment_amount
-            != WRITING_PLAN["amount_paise"]
+            != WRITING_PLAN[
+                "amount_paise"
+            ]
         ):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid payment amount.",
             )
 
+        # ----------------------------------------------------
+        # CURRENCY
+        # ----------------------------------------------------
+
         if (
             payment_currency
-            != WRITING_PLAN["currency"]
+            != WRITING_PLAN[
+                "currency"
+            ]
         ):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid payment currency.",
             )
+
+        # ----------------------------------------------------
+        # CAPTURED
+        # ----------------------------------------------------
 
         if payment_status != "captured":
             raise HTTPException(
@@ -987,8 +1202,8 @@ def verify_writing_payment(
 
     except Exception as exc:
         logger.exception(
-            "Unable to verify Razorpay payment | "
-            "payment_id=%s",
+            "Unable to verify Writing Razorpay payment | "
+            "payment=%s",
             razorpay_payment_id,
         )
 
@@ -1000,9 +1215,9 @@ def verify_writing_payment(
             ),
         ) from exc
 
-    # =========================================================================
-    # IDEMPOTENCY - PAYMENT ID
-    # =========================================================================
+    # ========================================================
+    # PAYMENT ID IDEMPOTENCY
+    # ========================================================
 
     existing = (
         db.query(WritingSubscription)
@@ -1015,8 +1230,10 @@ def verify_writing_payment(
 
     if existing:
 
-        # Security: same payment cannot activate another user's account
-        if str(existing.user_id) != str(user_id):
+        if (
+            str(existing.user_id)
+            != str(user_id)
+        ):
             raise HTTPException(
                 status_code=403,
                 detail=(
@@ -1032,15 +1249,17 @@ def verify_writing_payment(
                 "Payment already verified."
             ),
 
-            "subscription": get_subscription_status(
-                db=db,
-                user_id=user_id,
+            "subscription": (
+                get_subscription_status(
+                    db=db,
+                    user_id=user_id,
+                )
             ),
         }
 
-    # =========================================================================
-    # IDEMPOTENCY - ORDER ID
-    # =========================================================================
+    # ========================================================
+    # ORDER ID IDEMPOTENCY
+    # ========================================================
 
     existing_order = (
         db.query(WritingSubscription)
@@ -1053,7 +1272,10 @@ def verify_writing_payment(
 
     if existing_order:
 
-        if str(existing_order.user_id) != str(user_id):
+        if (
+            str(existing_order.user_id)
+            != str(user_id)
+        ):
             raise HTTPException(
                 status_code=403,
                 detail=(
@@ -1070,9 +1292,9 @@ def verify_writing_payment(
             ),
         )
 
-    # =========================================================================
+    # ========================================================
     # EXPIRE PREVIOUS ACTIVE SUBSCRIPTIONS
-    # =========================================================================
+    # ========================================================
 
     previous_subscriptions = (
         db.query(WritingSubscription)
@@ -1091,11 +1313,13 @@ def verify_writing_payment(
         previous.is_active = False
 
         if previous.payment_status == "paid":
-            previous.payment_status = "replaced"
+            previous.payment_status = (
+                "replaced"
+            )
 
-    # =========================================================================
-    # CREATE NEW SUBSCRIPTION
-    # =========================================================================
+    # ========================================================
+    # CREATE SUBSCRIPTION
+    # ========================================================
 
     now = _now_utc()
 
@@ -1148,9 +1372,9 @@ def verify_writing_payment(
 
     db.add(subscription)
 
-    # =========================================================================
+    # ========================================================
     # SAVE
-    # =========================================================================
+    # ========================================================
 
     try:
         db.commit()
@@ -1161,7 +1385,7 @@ def verify_writing_payment(
 
         logger.exception(
             "Failed to save Writing subscription | "
-            "user_id=%s | order_id=%s",
+            "user=%s order=%s",
             user_id,
             razorpay_order_id,
         )
@@ -1174,9 +1398,17 @@ def verify_writing_payment(
             ),
         ) from exc
 
-    # =========================================================================
-    # RESPONSE
-    # =========================================================================
+    # ========================================================
+    # SUCCESS
+    # ========================================================
+
+    logger.info(
+        "Writing payment verified successfully | "
+        "user=%s order=%s payment=%s",
+        user_id,
+        razorpay_order_id,
+        razorpay_payment_id,
+    )
 
     return {
         "success": True,
@@ -1185,23 +1417,25 @@ def verify_writing_payment(
             "Writing subscription activated."
         ),
 
-        "subscription": get_subscription_status(
-            db=db,
-            user_id=user_id,
+        "subscription": (
+            get_subscription_status(
+                db=db,
+                user_id=user_id,
+            )
         ),
     }
 
 
-# ============================================================================
+# ============================================================
 # CAN SUBMIT
-# ============================================================================
+# ============================================================
 
 def can_submit_writing(
     db: Session,
     user_id: int,
 ) -> bool:
     """
-    Return True when user can submit another answer.
+    Return True if user can submit another answer.
     """
 
     try:
@@ -1217,17 +1451,17 @@ def can_submit_writing(
 
     except Exception:
         logger.exception(
-            "Unable to determine Writing submit access | "
-            "user_id=%s",
+            "Unable to determine Writing submit "
+            "access | user_id=%s",
             user_id,
         )
 
         return False
 
 
-# ============================================================================
+# ============================================================
 # REMAINING ANSWERS
-# ============================================================================
+# ============================================================
 
 def get_remaining_writing_answers(
     db: Session,
@@ -1248,3 +1482,4 @@ def get_remaining_writing_answers(
             0,
         )
     )
+

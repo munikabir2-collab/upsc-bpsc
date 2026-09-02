@@ -7,20 +7,20 @@ import React, {
 
 /*
 |--------------------------------------------------------------------------
-| NEWS.JSX
+| MUNI48 - NEWS / CURRENT AFFAIRS
 |--------------------------------------------------------------------------
-| Features
-|--------------------------------------------------------------------------
-| 1. News search
-| 2. UPSC / BPSC
-| 3. Hindi / English
-| 4. Category filter
-| 5. Bihar only
-| 6. 402 => ₹1 Razorpay popup
-| 7. Payment verification
-| 8. Automatic News reload after payment
-| 9. MCQ loading
-| 10. 402 on MCQ => payment => automatic retry
+| Features:
+| - UPSC / BPSC
+| - Hindi / English
+| - Category
+| - Bihar only
+| - News search
+| - ₹1 Razorpay daily access
+| - Existing MCQ GET
+| - MCQ generation POST JSON
+| - 402 => Razorpay
+| - Payment verification
+| - Defensive API handling
 |--------------------------------------------------------------------------
 */
 
@@ -32,11 +32,9 @@ const RAZORPAY_SCRIPT =
     "https://checkout.razorpay.com/v1/checkout.js";
 
 const PAGE_SIZE = 20;
+const MCQ_COUNT = 5;
 
-const EXAMS = [
-    "UPSC",
-    "BPSC",
-];
+const EXAMS = ["UPSC", "BPSC"];
 
 const LANGUAGES = [
     {
@@ -69,7 +67,7 @@ const CATEGORIES = [
 
 /*
 |--------------------------------------------------------------------------
-| Helpers
+| HELPERS
 |--------------------------------------------------------------------------
 */
 
@@ -92,12 +90,67 @@ function getUser() {
     }
 }
 
+function getErrorMessage(
+    data,
+    fallback = "Request failed."
+) {
+    if (!data) {
+        return fallback;
+    }
+
+    if (typeof data === "string") {
+        return data;
+    }
+
+    const detail = data?.detail;
+
+    if (typeof detail === "string") {
+        return detail;
+    }
+
+    if (
+        detail &&
+        typeof detail === "object"
+    ) {
+        if (detail.message) {
+            return String(detail.message);
+        }
+
+        if (detail.detail) {
+            return String(detail.detail);
+        }
+
+        if (detail.error) {
+            return String(detail.error);
+        }
+
+        try {
+            return JSON.stringify(detail);
+        } catch {
+            return fallback;
+        }
+    }
+
+    if (data?.message) {
+        return String(data.message);
+    }
+
+    if (data?.error) {
+        return String(data.error);
+    }
+
+    return fallback;
+}
+
 function extract402Detail(data) {
     if (!data) {
         return null;
     }
 
-    if (typeof data.detail === "object") {
+    if (
+        typeof data.detail === "object" &&
+        data.detail !== null
+    ) {
         return data.detail;
     }
 
@@ -112,7 +165,10 @@ function extract402Detail(data) {
     return null;
 }
 
-function isPaymentRequired(status, data) {
+function isPaymentRequired(
+    status,
+    data
+) {
     if (status !== 402) {
         return false;
     }
@@ -127,14 +183,180 @@ function isPaymentRequired(status, data) {
     return (
         detail.code ===
             "NEWS_PAYMENT_REQUIRED" ||
-        detail.payment_endpoint ||
-        detail.amount === 1
+        Boolean(
+            detail.payment_endpoint
+        ) ||
+        Number(detail.amount) === 1
     );
 }
 
 /*
 |--------------------------------------------------------------------------
-| Load Razorpay SDK
+| ARTICLE ID
+|--------------------------------------------------------------------------
+*/
+
+function getArticleId(article) {
+    if (!article) {
+        return "";
+    }
+
+    return (
+        article.id ??
+        article.article_id ??
+        article.news_id ??
+        article.uuid ??
+        ""
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| NORMALIZE OPTIONS
+|--------------------------------------------------------------------------
+*/
+
+function normalizeOptions(options) {
+    if (Array.isArray(options)) {
+        return options.map((item) =>
+            typeof item === "object" &&
+            item !== null
+                ? item.text ??
+                  item.value ??
+                  item.label ??
+                  JSON.stringify(item)
+                : String(item)
+        );
+    }
+
+    if (
+        options &&
+        typeof options === "object"
+    ) {
+        return Object.entries(
+            options
+        ).map(
+            ([key, value]) => {
+                if (
+                    typeof value ===
+                    "object"
+                ) {
+                    return (
+                        value?.text ??
+                        value?.value ??
+                        value?.label ??
+                        `${key}: ${JSON.stringify(
+                            value
+                        )}`
+                    );
+                }
+
+                return String(value);
+            }
+        );
+    }
+
+    return [];
+}
+
+/*
+|--------------------------------------------------------------------------
+| NORMALIZE MCQ
+|--------------------------------------------------------------------------
+*/
+
+function normalizeMcq(item) {
+    if (!item) {
+        return null;
+    }
+
+    const question =
+        item.question ??
+        item.question_text ??
+        item.text ??
+        item.questionText ??
+        "";
+
+    const options =
+        normalizeOptions(
+            item.options ??
+                item.choices ??
+                item.answers
+        );
+
+    const correctAnswer =
+        item.correct_answer ??
+        item.correct_option ??
+        item.correctAnswer ??
+        item.answer ??
+        item.answer_text ??
+        "";
+
+    const explanation =
+        item.explanation ??
+        item.solution ??
+        item.reason ??
+        "";
+
+    return {
+        ...item,
+        question: String(question),
+        options,
+        correct_answer:
+            correctAnswer === null ||
+            correctAnswer === undefined
+                ? ""
+                : String(correctAnswer),
+        explanation:
+            explanation === null ||
+            explanation === undefined
+                ? ""
+                : String(explanation),
+    };
+}
+
+/*
+|--------------------------------------------------------------------------
+| NORMALIZE MCQ LIST
+|--------------------------------------------------------------------------
+*/
+
+function normalizeMcqs(data) {
+    let raw = [];
+
+    if (Array.isArray(data)) {
+        raw = data;
+    } else if (
+        Array.isArray(data?.mcqs)
+    ) {
+        raw = data.mcqs;
+    } else if (
+        Array.isArray(data?.questions)
+    ) {
+        raw = data.questions;
+    } else if (
+        Array.isArray(data?.data)
+    ) {
+        raw = data.data;
+    } else if (
+        Array.isArray(data?.results)
+    ) {
+        raw = data.results;
+    }
+
+    return raw
+        .map(normalizeMcq)
+        .filter(
+            (item) =>
+                item &&
+                item.question &&
+                item.question.trim()
+        );
+}
+
+/*
+|--------------------------------------------------------------------------
+| LOAD RAZORPAY
 |--------------------------------------------------------------------------
 */
 
@@ -142,6 +364,8 @@ function loadRazorpayScript() {
     return new Promise(
         (resolve, reject) => {
             if (
+                typeof window !==
+                    "undefined" &&
                 window.Razorpay
             ) {
                 resolve(true);
@@ -154,19 +378,52 @@ function loadRazorpayScript() {
                 );
 
             if (existing) {
+                const onLoad = () => {
+                    cleanup();
+
+                    if (
+                        window.Razorpay
+                    ) {
+                        resolve(true);
+                    } else {
+                        reject(
+                            new Error(
+                                "Razorpay SDK loaded but unavailable."
+                            )
+                        );
+                    }
+                };
+
+                const onError = () => {
+                    cleanup();
+
+                    reject(
+                        new Error(
+                            "Razorpay SDK failed to load."
+                        )
+                    );
+                };
+
+                const cleanup = () => {
+                    existing.removeEventListener(
+                        "load",
+                        onLoad
+                    );
+
+                    existing.removeEventListener(
+                        "error",
+                        onError
+                    );
+                };
+
                 existing.addEventListener(
                     "load",
-                    () => resolve(true)
+                    onLoad
                 );
 
                 existing.addEventListener(
                     "error",
-                    () =>
-                        reject(
-                            new Error(
-                                "Razorpay SDK load failed."
-                            )
-                        )
+                    onError
                 );
 
                 return;
@@ -182,15 +439,27 @@ function loadRazorpayScript() {
 
             script.async = true;
 
-            script.onload = () =>
-                resolve(true);
+            script.onload = () => {
+                if (
+                    window.Razorpay
+                ) {
+                    resolve(true);
+                } else {
+                    reject(
+                        new Error(
+                            "Razorpay SDK unavailable."
+                        )
+                    );
+                }
+            };
 
-            script.onerror = () =>
+            script.onerror = () => {
                 reject(
                     new Error(
-                        "Unable to load Razorpay."
+                        "Unable to load Razorpay SDK."
                     )
                 );
+            };
 
             document.body.appendChild(
                 script
@@ -201,11 +470,17 @@ function loadRazorpayScript() {
 
 /*
 |--------------------------------------------------------------------------
-| Main Component
+| MAIN
 |--------------------------------------------------------------------------
 */
 
 export default function News() {
+    /*
+    |--------------------------------------------------------------------------
+    | FILTERS
+    |--------------------------------------------------------------------------
+    */
+
     const [exam, setExam] =
         useState("UPSC");
 
@@ -220,6 +495,12 @@ export default function News() {
 
     const [query, setQuery] =
         useState("India");
+
+    /*
+    |--------------------------------------------------------------------------
+    | NEWS
+    |--------------------------------------------------------------------------
+    */
 
     const [articles, setArticles] =
         useState([]);
@@ -236,39 +517,75 @@ export default function News() {
     const [total, setTotal] =
         useState(0);
 
-    const [paymentLoading, setPaymentLoading] =
-        useState(false);
+    /*
+    |--------------------------------------------------------------------------
+    | PAYMENT
+    |--------------------------------------------------------------------------
+    */
 
-    const [paymentMessage, setPaymentMessage] =
-        useState("");
+    const [
+        paymentLoading,
+        setPaymentLoading,
+    ] = useState(false);
+
+    const [
+        paymentMessage,
+        setPaymentMessage,
+    ] = useState("");
 
     const [hasAccess, setHasAccess] =
         useState(false);
 
-    const [selectedArticle, setSelectedArticle] =
-        useState(null);
+    /*
+    |--------------------------------------------------------------------------
+    | ARTICLE / MCQ
+    |--------------------------------------------------------------------------
+    */
+
+    const [
+        selectedArticle,
+        setSelectedArticle,
+    ] = useState(null);
 
     const [mcqs, setMcqs] =
         useState([]);
 
-    const [mcqLoading, setMcqLoading] =
-        useState(false);
+    const [
+        mcqLoading,
+        setMcqLoading,
+    ] = useState(false);
 
-    const [mcqError, setMcqError] =
-        useState("");
+    const [
+        mcqError,
+        setMcqError,
+    ] = useState("");
 
-    const [mcqVisible, setMcqVisible] =
-        useState(false);
-
-    const paymentInProgress =
-        useRef(false);
-
-    const retryAfterPayment =
-        useRef(null);
+    const [
+        mcqVisible,
+        setMcqVisible,
+    ] = useState(false);
 
     /*
     |--------------------------------------------------------------------------
-    | Auth Headers
+    | REFS
+    |--------------------------------------------------------------------------
+    */
+
+    const paymentPromiseRef =
+        useRef(null);
+
+    const paymentCooldownUntil =
+        useRef(0);
+
+    const newsRequestRef =
+        useRef(0);
+
+    const initialLoadRef =
+        useRef(false);
+
+    /*
+    |--------------------------------------------------------------------------
+    | HEADERS
     |--------------------------------------------------------------------------
     */
 
@@ -278,6 +595,8 @@ export default function News() {
                 getToken();
 
             const headers = {
+                Accept:
+                    "application/json",
                 "Content-Type":
                     "application/json",
             };
@@ -292,36 +611,75 @@ export default function News() {
 
     /*
     |--------------------------------------------------------------------------
-    | Generic API Request
+    | API REQUEST
     |--------------------------------------------------------------------------
     */
 
     const apiRequest =
         useCallback(
             async (
-                url,
+                endpoint,
                 options = {}
             ) => {
-                const response =
-                    await fetch(
-                        `${API_URL}${url}`,
-                        {
-                            ...options,
-                            headers: {
-                                ...getHeaders(),
-                                ...(options.headers ||
-                                    {}),
-                            },
-                        }
+                const url =
+                    endpoint.startsWith(
+                        "http"
+                    )
+                        ? endpoint
+                        : `${API_URL}${endpoint}`;
+
+                let response;
+
+                try {
+                    response =
+                        await fetch(
+                            url,
+                            {
+                                ...options,
+
+                                headers: {
+                                    ...getHeaders(),
+                                    ...(options.headers ||
+                                        {}),
+                                },
+                            }
+                        );
+                } catch (
+                    networkError
+                ) {
+                    throw new Error(
+                        `Backend connection failed. ${networkError?.message || ""}`
                     );
+                }
+
+                const contentType =
+                    response.headers.get(
+                        "content-type"
+                    ) || "";
 
                 let data = null;
 
-                try {
-                    data =
-                        await response.json();
-                } catch {
-                    data = null;
+                if (
+                    contentType.includes(
+                        "application/json"
+                    )
+                ) {
+                    try {
+                        data =
+                            await response.json();
+                    } catch {
+                        data = null;
+                    }
+                } else {
+                    try {
+                        const text =
+                            await response.text();
+
+                        data =
+                            text || null;
+                    } catch {
+                        data = null;
+                    }
                 }
 
                 return {
@@ -334,48 +692,46 @@ export default function News() {
 
     /*
     |--------------------------------------------------------------------------
-    | Create Razorpay Order
+    | CREATE PAYMENT ORDER
     |--------------------------------------------------------------------------
     */
 
     const createPaymentOrder =
-        useCallback(
-            async () => {
-                const {
-                    response,
-                    data,
-                } =
-                    await apiRequest(
-                        "/news/payment/create-order",
-                        {
-                            method: "POST",
-                        }
-                    );
+        useCallback(async () => {
+            const {
+                response,
+                data,
+            } =
+                await apiRequest(
+                    "/news/payment/create-order",
+                    {
+                        method: "POST",
+                    }
+                );
 
-                if (
-                    response.status ===
-                    401
-                ) {
-                    throw new Error(
-                        "Please login again."
-                    );
-                }
+            if (
+                response.status === 401
+            ) {
+                throw new Error(
+                    "Session expired. Please login again."
+                );
+            }
 
-                if (!response.ok) {
-                    throw new Error(
-                        data?.detail ||
-                            "Unable to create payment order."
-                    );
-                }
+            if (!response.ok) {
+                throw new Error(
+                    getErrorMessage(
+                        data,
+                        `Unable to create payment order (${response.status}).`
+                    )
+                );
+            }
 
-                return data;
-            },
-            [apiRequest]
-        );
+            return data;
+        }, [apiRequest]);
 
     /*
     |--------------------------------------------------------------------------
-    | Verify Payment
+    | VERIFY PAYMENT
     |--------------------------------------------------------------------------
     */
 
@@ -394,20 +750,24 @@ export default function News() {
                         "/news/payment/verify",
                         {
                             method: "POST",
-                            body: JSON.stringify(
-                                {
-                                    razorpay_order_id,
-                                    razorpay_payment_id,
-                                    razorpay_signature,
-                                }
-                            ),
+
+                            body:
+                                JSON.stringify(
+                                    {
+                                        razorpay_order_id,
+                                        razorpay_payment_id,
+                                        razorpay_signature,
+                                    }
+                                ),
                         }
                     );
 
                 if (!response.ok) {
                     throw new Error(
-                        data?.detail ||
+                        getErrorMessage(
+                            data,
                             "Payment verification failed."
+                        )
                     );
                 }
 
@@ -418,352 +778,329 @@ export default function News() {
 
     /*
     |--------------------------------------------------------------------------
-    | Open Razorpay
+    | RAZORPAY PAYMENT
     |--------------------------------------------------------------------------
     */
 
     const openRazorpayPayment =
         useCallback(
-            async (
-                afterPayment
-            ) => {
+            async (afterPayment) => {
                 if (
-                    paymentInProgress.current
+                    paymentPromiseRef.current
                 ) {
+                    return paymentPromiseRef.current;
+                }
+
+                if (
+                    Date.now() <
+                    paymentCooldownUntil.current
+                ) {
+                    setPaymentMessage(
+                        "Please wait a few seconds before retrying payment."
+                    );
+
                     return;
                 }
 
-                paymentInProgress.current =
-                    true;
-
-                setPaymentLoading(
-                    true
-                );
-
-                setPaymentMessage(
-                    "Payment window preparing..."
-                );
-
-                try {
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Load SDK
-                    |--------------------------------------------------------------------------
-                    */
-
-                    await loadRazorpayScript();
-
-                    if (
-                        !window.Razorpay
-                    ) {
-                        throw new Error(
-                            "Razorpay SDK is unavailable."
-                        );
-                    }
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Create ₹1 Order
-                    |--------------------------------------------------------------------------
-                    */
-
-                    const order =
-                        await createPaymentOrder();
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Already Paid
-                    |--------------------------------------------------------------------------
-                    */
-
-                    if (
-                        order?.has_access ===
-                            true ||
-                        order?.access_active ===
-                            true
-                    ) {
-                        setHasAccess(
+                const promise =
+                    (async () => {
+                        setPaymentLoading(
                             true
                         );
 
-                        setPaymentMessage(
-                            "Today's News access is already active."
-                        );
-
-                        if (
-                            typeof afterPayment ===
-                            "function"
-                        ) {
-                            await afterPayment();
-                        }
-
-                        return;
-                    }
-
-                    const keyId =
-                        order?.key_id;
-
-                    const orderId =
-                        order?.order_id;
-
-                    const amount =
-                        Number(
-                            order?.amount ||
-                                100
-                        );
-
-                    const currency =
-                        order?.currency ||
-                        "INR";
-
-                    if (!keyId) {
-                        throw new Error(
-                            "Razorpay Key ID missing from server."
-                        );
-                    }
-
-                    if (!orderId) {
-                        throw new Error(
-                            "Razorpay Order ID missing."
-                        );
-                    }
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Razorpay Options
-                    |--------------------------------------------------------------------------
-                    */
-
-                    await new Promise(
-                        (
-                            resolve,
-                            reject
-                        ) => {
-                            let completed =
-                                false;
-
-                            const finish =
-                                (
-                                    callback
-                                ) => {
-                                    if (
-                                        completed
-                                    ) {
-                                        return;
-                                    }
-
-                                    completed =
-                                        true;
-
-                                    callback();
-                                };
-
-                            const options =
-                                {
-                                    key: keyId,
-
-                                    amount,
-
-                                    currency,
-
-                                    name:
-                                        "Muni48",
-
-                                    description:
-                                        "Daily Current Affairs Access",
-
-                                    order_id:
-                                        orderId,
-
-                                    prefill:
-                                        {
-                                            name:
-                                                getUser()
-                                                    ?.name ||
-                                                "",
-                                            email:
-                                                getUser()
-                                                    ?.email ||
-                                                "",
-                                        },
-
-                                    notes:
-                                        {
-                                            feature:
-                                                "daily_current_affairs",
-                                        },
-
-                                    theme:
-                                        {
-                                            color:
-                                                "#2563eb",
-                                        },
-
-                                    modal:
-                                        {
-                                            ondismiss:
-                                                () => {
-                                                    finish(
-                                                        () => {
-                                                            setPaymentMessage(
-                                                                "Payment cancelled."
-                                                            );
-
-                                                            paymentInProgress.current =
-                                                                false;
-
-                                                            setPaymentLoading(
-                                                                false
-                                                            );
-
-                                                            resolve();
-                                                        }
-                                                    );
-                                                },
-                                        },
-
-                                    handler:
-                                        async (
-                                            paymentResponse
-                                        ) => {
-                                            try {
-                                                setPaymentMessage(
-                                                    "Payment successful. Verifying..."
-                                                );
-
-                                                /*
-                                                |--------------------------------------------------------------------------
-                                                | Verify on backend
-                                                |--------------------------------------------------------------------------
-                                                */
-
-                                                const verified =
-                                                    await verifyPayment(
-                                                        {
-                                                            razorpay_order_id:
-                                                                paymentResponse.razorpay_order_id,
-
-                                                            razorpay_payment_id:
-                                                                paymentResponse.razorpay_payment_id,
-
-                                                            razorpay_signature:
-                                                                paymentResponse.razorpay_signature,
-                                                        }
-                                                    );
-
-                                                if (
-                                                    !verified?.has_access &&
-                                                    !verified?.access_active
-                                                ) {
-                                                    throw new Error(
-                                                        "Payment verified but access is not active."
-                                                    );
-                                                }
-
-                                                /*
-                                                |--------------------------------------------------------------------------
-                                                | Access Active
-                                                |--------------------------------------------------------------------------
-                                                */
-
-                                                setHasAccess(
-                                                    true
-                                                );
-
-                                                setPaymentMessage(
-                                                    "Payment verified. Loading News..."
-                                                );
-
-                                                /*
-                                                |--------------------------------------------------------------------------
-                                                | Retry Original Request
-                                                |--------------------------------------------------------------------------
-                                                */
-
-                                                if (
-                                                    typeof afterPayment ===
-                                                    "function"
-                                                ) {
-                                                    await afterPayment();
-                                                }
-
-                                                finish(
-                                                    () =>
-                                                        resolve()
-                                                );
-                                            } catch (
-                                                verifyError
-                                            ) {
-                                                setPaymentMessage(
-                                                    verifyError
-                                                        ?.message ||
-                                                        "Payment verification failed."
-                                                );
-
-                                                finish(
-                                                    () =>
-                                                        reject(
-                                                            verifyError
-                                                        )
-                                                );
-                                            }
-                                        },
-                                };
-
-                            const razorpay =
-                                new window.Razorpay(
-                                    options
-                                );
-
-                            razorpay.on(
-                                "payment.failed",
-                                (
-                                    paymentError
-                                ) => {
-                                    setPaymentMessage(
-                                        paymentError
-                                            ?.error
-                                            ?.description ||
-                                            "Payment failed."
-                                    );
-
-                                    finish(
-                                        () =>
-                                            reject(
-                                                new Error(
-                                                    paymentError
-                                                        ?.error
-                                                        ?.description ||
-                                                        "Payment failed."
-                                                )
-                                            )
-                                    );
-                                }
+                        try {
+                            setPaymentMessage(
+                                "Preparing ₹1 payment..."
                             );
 
-                            razorpay.open();
+                            await loadRazorpayScript();
+
+                            const order =
+                                await createPaymentOrder();
+
+                            /*
+                             * ALREADY ACTIVE
+                             */
+
+                            if (
+                                order?.has_access ===
+                                    true ||
+                                order?.access_active ===
+                                    true
+                            ) {
+                                setHasAccess(
+                                    true
+                                );
+
+                                setPaymentMessage(
+                                    "✓ Today's access is already active."
+                                );
+
+                                if (
+                                    typeof afterPayment ===
+                                    "function"
+                                ) {
+                                    await afterPayment();
+                                }
+
+                                return;
+                            }
+
+                            const keyId =
+                                order?.key_id ??
+                                order?.keyId;
+
+                            const orderId =
+                                order?.order_id ??
+                                order?.orderId ??
+                                order?.id;
+
+                            const amount =
+                                Number(
+                                    order?.amount ??
+                                        100
+                                );
+
+                            const currency =
+                                order?.currency ??
+                                "INR";
+
+                            if (!keyId) {
+                                throw new Error(
+                                    "Razorpay Key ID missing from server."
+                                );
+                            }
+
+                            if (!orderId) {
+                                throw new Error(
+                                    "Razorpay Order ID missing from server."
+                                );
+                            }
+
+                            await new Promise(
+                                (
+                                    resolve,
+                                    reject
+                                ) => {
+                                    let finished =
+                                        false;
+
+                                    const finish =
+                                        (
+                                            callback
+                                        ) => {
+                                            if (
+                                                finished
+                                            ) {
+                                                return;
+                                            }
+
+                                            finished =
+                                                true;
+
+                                            callback();
+                                        };
+
+                                    const currentUser =
+                                        getUser();
+
+                                    const options =
+                                        {
+                                            key:
+                                                keyId,
+
+                                            amount,
+
+                                            currency,
+
+                                            name:
+                                                "Muni48",
+
+                                            description:
+                                                "Daily Current Affairs Access",
+
+                                            order_id:
+                                                orderId,
+
+                                            prefill:
+                                                {
+                                                    name:
+                                                        currentUser?.name ||
+                                                        "",
+
+                                                    email:
+                                                        currentUser?.email ||
+                                                        "",
+                                                },
+
+                                            notes:
+                                                {
+                                                    feature:
+                                                        "daily_current_affairs",
+                                                },
+
+                                            theme:
+                                                {
+                                                    color:
+                                                        "#2563eb",
+                                                },
+
+                                            modal:
+                                                {
+                                                    ondismiss:
+                                                        () => {
+                                                            finish(
+                                                                () => {
+                                                                    setPaymentMessage(
+                                                                        "Payment cancelled."
+                                                                    );
+
+                                                                    resolve();
+                                                                }
+                                                            );
+                                                        },
+                                                },
+
+                                            handler:
+                                                async (
+                                                    paymentResponse
+                                                ) => {
+                                                    try {
+                                                        setPaymentMessage(
+                                                            "Payment received. Verifying..."
+                                                        );
+
+                                                        const verified =
+                                                            await verifyPayment(
+                                                                {
+                                                                    razorpay_order_id:
+                                                                        paymentResponse
+                                                                            ?.razorpay_order_id,
+
+                                                                    razorpay_payment_id:
+                                                                        paymentResponse
+                                                                            ?.razorpay_payment_id,
+
+                                                                    razorpay_signature:
+                                                                        paymentResponse
+                                                                            ?.razorpay_signature,
+                                                                }
+                                                            );
+
+                                                        if (
+                                                            verified?.has_access !==
+                                                                true &&
+                                                            verified?.access_active !==
+                                                                true
+                                                        ) {
+                                                            throw new Error(
+                                                                "Payment verified but access is not active."
+                                                            );
+                                                        }
+
+                                                        setHasAccess(
+                                                            true
+                                                        );
+
+                                                        setPaymentMessage(
+                                                            "✓ ₹1 payment verified."
+                                                        );
+
+                                                        if (
+                                                            typeof afterPayment ===
+                                                            "function"
+                                                        ) {
+                                                            await afterPayment();
+                                                        }
+
+                                                        finish(
+                                                            () =>
+                                                                resolve()
+                                                        );
+                                                    } catch (
+                                                        verificationError
+                                                    ) {
+                                                        finish(
+                                                            () =>
+                                                                reject(
+                                                                    verificationError
+                                                                )
+                                                        );
+                                                    }
+                                                },
+                                        };
+
+                                    const razorpay =
+                                        new window.Razorpay(
+                                            options
+                                        );
+
+                                    razorpay.on(
+                                        "payment.failed",
+                                        (
+                                            paymentError
+                                        ) => {
+                                            const description =
+                                                paymentError
+                                                    ?.error
+                                                    ?.description ||
+                                                "Payment failed.";
+
+                                            setPaymentMessage(
+                                                description
+                                            );
+
+                                            paymentCooldownUntil.current =
+                                                Date.now() +
+                                                10000;
+
+                                            finish(
+                                                () =>
+                                                    reject(
+                                                        new Error(
+                                                            description
+                                                        )
+                                                    )
+                                            );
+                                        }
+                                    );
+
+                                    razorpay.open();
+                                }
+                            );
+                        } catch (
+                            paymentError
+                        ) {
+                            console.error(
+                                "Payment error:",
+                                paymentError
+                            );
+
+                            setPaymentMessage(
+                                paymentError?.message ||
+                                    "Unable to process ₹1 payment."
+                            );
+
+                            throw paymentError;
+                        } finally {
+                            setPaymentLoading(
+                                false
+                            );
+
+                            paymentCooldownUntil.current =
+                                Date.now() +
+                                3000;
                         }
-                    );
-                } catch (paymentError) {
-                    console.error(
-                        "Razorpay error:",
-                        paymentError
-                    );
+                    })();
 
-                    setPaymentMessage(
-                        paymentError
-                            ?.message ||
-                            "Unable to process payment."
-                    );
+                paymentPromiseRef.current =
+                    promise;
 
-                    throw paymentError;
+                try {
+                    return await promise;
                 } finally {
-                    paymentInProgress.current =
-                        false;
-
-                    setPaymentLoading(
-                        false
-                    );
+                    paymentPromiseRef.current =
+                        null;
                 }
             },
             [
@@ -774,7 +1111,7 @@ export default function News() {
 
     /*
     |--------------------------------------------------------------------------
-    | Fetch News
+    | FETCH NEWS
     |--------------------------------------------------------------------------
     */
 
@@ -783,11 +1120,13 @@ export default function News() {
             async ({
                 requestedPage = 1,
                 silent = false,
+                allowPayment = true,
             } = {}) => {
+                const requestId =
+                    ++newsRequestRef.current;
+
                 if (!silent) {
-                    setLoading(
-                        true
-                    );
+                    setLoading(true);
                 }
 
                 setError("");
@@ -810,9 +1149,7 @@ export default function News() {
 
                 params.set(
                     "page_size",
-                    String(
-                        PAGE_SIZE
-                    )
+                    String(PAGE_SIZE)
                 );
 
                 params.set(
@@ -825,18 +1162,14 @@ export default function News() {
                     exam
                 );
 
-                if (
-                    category
-                ) {
+                if (category) {
                     params.set(
                         "category",
                         category
                     );
                 }
 
-                if (
-                    biharOnly
-                ) {
+                if (biharOnly) {
                     params.set(
                         "bihar_only",
                         "true"
@@ -852,55 +1185,39 @@ export default function News() {
                             `/news/search?${params.toString()}`
                         );
 
+                    if (
+                        requestId !==
+                        newsRequestRef.current
+                    ) {
+                        return;
+                    }
+
                     /*
-                    |--------------------------------------------------------------------------
-                    | 402 PAYMENT REQUIRED
-                    |--------------------------------------------------------------------------
-                    */
+                     * 402
+                     */
 
                     if (
+                        allowPayment &&
                         isPaymentRequired(
                             response.status,
                             data
                         )
                     ) {
-                        setLoading(
-                            false
-                        );
+                        setLoading(false);
 
                         setPaymentMessage(
                             "Today's News access requires ₹1 payment."
                         );
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Save request for automatic retry
-                        |--------------------------------------------------------------------------
-                        */
-
-                        retryAfterPayment.current =
+                        await openRazorpayPayment(
                             async () => {
                                 await fetchNews(
                                     {
                                         requestedPage,
                                         silent: false,
+                                        allowPayment: false,
                                     }
                                 );
-                            };
-
-                        await openRazorpayPayment(
-                            async () => {
-                                const retry =
-                                    retryAfterPayment.current;
-
-                                retryAfterPayment.current =
-                                    null;
-
-                                if (
-                                    retry
-                                ) {
-                                    await retry();
-                                }
                             }
                         );
 
@@ -908,78 +1225,61 @@ export default function News() {
                     }
 
                     /*
-                    |--------------------------------------------------------------------------
-                    | Unauthorized
-                    |--------------------------------------------------------------------------
-                    */
+                     * 401
+                     */
 
                     if (
                         response.status ===
                         401
                     ) {
-                        setError(
+                        throw new Error(
                             "Session expired. Please login again."
                         );
-
-                        return;
                     }
 
                     /*
-                    |--------------------------------------------------------------------------
-                    | Other errors
-                    |--------------------------------------------------------------------------
-                    */
+                     * ERROR
+                     */
 
                     if (!response.ok) {
-                        const detail =
-                            data?.detail;
-
-                        let message =
-                            "News load failed.";
-
-                        if (
-                            typeof detail ===
-                            "string"
-                        ) {
-                            message =
-                                detail;
-                        } else if (
-                            detail?.message
-                        ) {
-                            message =
-                                detail.message;
-                        }
-
                         throw new Error(
-                            `Request failed (${response.status}). ${message}`
+                            `Request failed (${response.status}). ${getErrorMessage(
+                                data,
+                                "News load failed."
+                            )}`
                         );
                     }
 
                     /*
-                    |--------------------------------------------------------------------------
-                    | Success
-                    |--------------------------------------------------------------------------
-                    */
+                     * SUCCESS
+                     */
 
-                    setArticles(
+                    const resultArticles =
                         Array.isArray(
                             data?.articles
                         )
                             ? data.articles
-                            : []
+                            : Array.isArray(
+                                  data?.results
+                              )
+                            ? data.results
+                            : [];
+
+                    setArticles(
+                        resultArticles
                     );
 
                     setTotal(
                         Number(
-                            data?.total ||
-                                data?.filtered_results ||
-                                0
+                            data?.total ??
+                                data?.filtered_results ??
+                                resultArticles.length
                         )
                     );
 
                     setPage(
                         Number(
-                            data?.page ||
+                            data?.page ??
                                 requestedPage
                         )
                     );
@@ -988,35 +1288,22 @@ export default function News() {
                         true
                     );
 
-                    setPaymentMessage(
-                        ""
-                    );
-                } catch (fetchError) {
+                    setPaymentMessage("");
+                } catch (
+                    fetchError
+                ) {
                     console.error(
                         "News fetch error:",
                         fetchError
                     );
 
-                    if (
-                        fetchError
-                            ?.message
-                            ?.includes(
-                                "cancelled"
-                            )
-                    ) {
-                        return;
-                    }
-
                     setError(
-                        fetchError
-                            ?.message ||
+                        fetchError?.message ||
                             "News load failed."
                     );
                 } finally {
                     if (!silent) {
-                        setLoading(
-                            false
-                        );
+                        setLoading(false);
                     }
                 }
             },
@@ -1033,28 +1320,58 @@ export default function News() {
 
     /*
     |--------------------------------------------------------------------------
-    | Load Article MCQs
+    | LOAD / GENERATE MCQS
     |--------------------------------------------------------------------------
     */
 
     const loadArticleMCQs =
         useCallback(
             async (
-                articleId
+                articleId,
+                allowPayment = true
             ) => {
-                if (!articleId) {
+                /*
+                 * IMPORTANT:
+                 * Never allow undefined article ID.
+                 */
+
+                if (
+                    articleId ===
+                        undefined ||
+                    articleId ===
+                        null ||
+                    String(
+                        articleId
+                    ).trim() === ""
+                ) {
+                    setMcqVisible(true);
+                    setMcqError(
+                        language === "hi"
+                            ? "इस article का valid ID नहीं मिला।"
+                            : "Valid article ID was not found."
+                    );
                     return;
                 }
 
-                setMcqLoading(
-                    true
-                );
+                const safeArticleId =
+                    encodeURIComponent(
+                        String(
+                            articleId
+                        )
+                    );
 
-                setMcqError(
-                    ""
-                );
+                setMcqLoading(true);
+                setMcqError("");
+                setMcqVisible(true);
 
                 try {
+                    /*
+                     * ======================================================
+                     * STEP 1
+                     * GET EXISTING MCQs
+                     * ======================================================
+                     */
+
                     const params =
                         new URLSearchParams();
 
@@ -1069,23 +1386,34 @@ export default function News() {
                     );
 
                     const {
-                        response,
-                        data,
+                        response:
+                            getResponse,
+                        data:
+                            getData,
                     } =
                         await apiRequest(
-                            `/news/${articleId}/mcqs?${params.toString()}`
+                            `/news/${safeArticleId}/mcqs?${params.toString()}`
                         );
 
+                    console.log(
+                        "MCQ GET:",
+                        {
+                            status:
+                                getResponse.status,
+                            data:
+                                getData,
+                        }
+                    );
+
                     /*
-                    |--------------------------------------------------------------------------
-                    | 402 => Payment
-                    |--------------------------------------------------------------------------
-                    */
+                     * PAYMENT
+                     */
 
                     if (
+                        allowPayment &&
                         isPaymentRequired(
-                            response.status,
-                            data
+                            getResponse.status,
+                            getData
                         )
                     ) {
                         setMcqLoading(
@@ -1093,13 +1421,16 @@ export default function News() {
                         );
 
                         setPaymentMessage(
-                            "Today's News/MCQ access requires ₹1 payment."
+                            language === "hi"
+                                ? "आज के MCQ access के लिए ₹1 payment आवश्यक है।"
+                                : "Today's MCQ access requires ₹1 payment."
                         );
 
                         await openRazorpayPayment(
                             async () => {
                                 await loadArticleMCQs(
-                                    articleId
+                                    articleId,
+                                    false
                                 );
                             }
                         );
@@ -1107,43 +1438,318 @@ export default function News() {
                         return;
                     }
 
+                    /*
+                     * AUTH
+                     */
+
                     if (
-                        response.status ===
+                        getResponse.status ===
                         401
                     ) {
                         throw new Error(
-                            "Session expired. Please login again."
+                            language === "hi"
+                                ? "Session समाप्त हो गया है। कृपया फिर से login करें।"
+                                : "Session expired. Please login again."
                         );
                     }
 
-                    if (!response.ok) {
+                    /*
+                     * Other GET errors
+                     */
+
+                    if (
+                        !getResponse.ok
+                    ) {
                         throw new Error(
-                            data?.detail ||
-                                "MCQs could not be loaded."
+                            getErrorMessage(
+                                getData,
+                                language === "hi"
+                                    ? `MCQ load नहीं हो सके (${getResponse.status}).`
+                                    : `MCQs could not be loaded (${getResponse.status}).`
+                            )
                         );
                     }
+
+                    /*
+                     * EXISTING MCQS
+                     */
+
+                    const existingMcqs =
+                        normalizeMcqs(
+                            getData
+                        );
+
+                    if (
+                        existingMcqs.length >
+                        0
+                    ) {
+                        setMcqs(
+                            existingMcqs
+                        );
+
+                        setMcqVisible(
+                            true
+                        );
+
+                        setMcqLoading(
+                            false
+                        );
+
+                        setPaymentMessage(
+                            ""
+                        );
+
+                        return;
+                    }
+
+                    /*
+                     * ======================================================
+                     * STEP 2
+                     * GENERATE
+                     * ======================================================
+                     */
+
+                    setMcqError("");
+
+                    setPaymentMessage(
+                        language === "hi"
+                            ? "MCQs generate हो रहे हैं..."
+                            : "Generating MCQs..."
+                    );
+
+                    const generateBody = {
+                        exam:
+                            exam.toUpperCase(),
+
+                        language:
+                            language,
+
+                        count:
+                            MCQ_COUNT,
+
+                        difficulty:
+                            "Medium",
+
+                        question_type:
+                            "single_correct",
+                    };
+
+                    console.log(
+                        "MCQ POST URL:",
+                        `${API_URL}/news/${safeArticleId}/mcqs/generate`
+                    );
+
+                    console.log(
+                        "MCQ POST BODY:",
+                        generateBody
+                    );
+
+                    const {
+                        response:
+                            generateResponse,
+                        data:
+                            generateData,
+                    } =
+                        await apiRequest(
+                            `/news/${safeArticleId}/mcqs/generate`,
+                            {
+                                method:
+                                    "POST",
+
+                                body:
+                                    JSON.stringify(
+                                        generateBody
+                                    ),
+                            }
+                        );
+
+                    console.log(
+                        "MCQ POST RESPONSE:",
+                        {
+                            status:
+                                generateResponse.status,
+                            data:
+                                generateData,
+                        }
+                    );
+
+                    /*
+                     * PAYMENT ON POST
+                     */
+
+                    if (
+                        allowPayment &&
+                        isPaymentRequired(
+                            generateResponse.status,
+                            generateData
+                        )
+                    ) {
+                        setMcqLoading(
+                            false
+                        );
+
+                        setPaymentMessage(
+                            language === "hi"
+                                ? "MCQ generate करने के लिए ₹1 payment आवश्यक है।"
+                                : "MCQ generation requires ₹1 payment."
+                        );
+
+                        await openRazorpayPayment(
+                            async () => {
+                                await loadArticleMCQs(
+                                    articleId,
+                                    false
+                                );
+                            }
+                        );
+
+                        return;
+                    }
+
+                    /*
+                     * 401
+                     */
+
+                    if (
+                        generateResponse.status ===
+                        401
+                    ) {
+                        throw new Error(
+                            language === "hi"
+                                ? "Session समाप्त हो गया है। कृपया फिर से login करें।"
+                                : "Session expired. Please login again."
+                        );
+                    }
+
+                    /*
+                     * 422
+                     */
+
+                    if (
+                        generateResponse.status ===
+                        422
+                    ) {
+                        console.error(
+                            "MCQ 422:",
+                            generateData
+                        );
+
+                        throw new Error(
+                            getErrorMessage(
+                                generateData,
+                                language === "hi"
+                                    ? "MCQ request validation failed."
+                                    : "MCQ request validation failed."
+                            )
+                        );
+                    }
+
+                    /*
+                     * OTHER ERROR
+                     */
+
+                    if (
+                        !generateResponse.ok
+                    ) {
+                        throw new Error(
+                            getErrorMessage(
+                                generateData,
+                                language === "hi"
+                                    ? `MCQs generate नहीं हो सके (${generateResponse.status}).`
+                                    : `MCQs could not be generated (${generateResponse.status}).`
+                            )
+                        );
+                    }
+
+                    /*
+                     * POST RESPONSE
+                     */
+
+                    let generatedMcqs =
+                        normalizeMcqs(
+                            generateData
+                        );
+
+                    /*
+                     * Some backend implementations
+                     * return only status after POST.
+                     *
+                     * Therefore GET again.
+                     */
+
+                    if (
+                        generatedMcqs.length ===
+                        0
+                    ) {
+                        const {
+                            response:
+                                retryResponse,
+                            data:
+                                retryData,
+                        } =
+                            await apiRequest(
+                                `/news/${safeArticleId}/mcqs?${params.toString()}`
+                            );
+
+                        console.log(
+                            "MCQ RETRY GET:",
+                            {
+                                status:
+                                    retryResponse.status,
+                                data:
+                                    retryData,
+                            }
+                        );
+
+                        if (
+                            retryResponse.ok
+                        ) {
+                            generatedMcqs =
+                                normalizeMcqs(
+                                    retryData
+                                );
+                        }
+                    }
+
+                    /*
+                     * FINAL
+                     */
 
                     setMcqs(
-                        Array.isArray(
-                            data?.mcqs
-                        )
-                            ? data.mcqs
-                            : []
+                        generatedMcqs
                     );
 
                     setMcqVisible(
                         true
                     );
-                } catch (mcqFetchError) {
+
+                    if (
+                        generatedMcqs.length ===
+                        0
+                    ) {
+                        throw new Error(
+                            language === "hi"
+                                ? "MCQ generation complete हुआ, लेकिन backend ने कोई valid MCQ return नहीं किया।"
+                                : "MCQ generation completed, but the backend returned no valid MCQs."
+                        );
+                    }
+
+                    setPaymentMessage("");
+                } catch (
+                    mcqFetchError
+                ) {
                     console.error(
-                        "MCQ error:",
+                        "MCQ ERROR:",
                         mcqFetchError
                     );
 
+                    setMcqVisible(true);
+
                     setMcqError(
-                        mcqFetchError
-                            ?.message ||
-                            "MCQs could not be loaded."
+                        mcqFetchError?.message ||
+                            (language === "hi"
+                                ? "MCQs load नहीं हो सके।"
+                                : "MCQs could not be loaded.")
                     );
                 } finally {
                     setMcqLoading(
@@ -1161,7 +1767,7 @@ export default function News() {
 
     /*
     |--------------------------------------------------------------------------
-    | Initial Load
+    | INITIAL LOAD / FILTER CHANGE
     |--------------------------------------------------------------------------
     */
 
@@ -1178,14 +1784,12 @@ export default function News() {
 
     /*
     |--------------------------------------------------------------------------
-    | Search
+    | SEARCH
     |--------------------------------------------------------------------------
     */
 
     const handleSearch =
-        async (
-            event
-        ) => {
+        async (event) => {
             event?.preventDefault();
 
             await fetchNews({
@@ -1195,32 +1799,25 @@ export default function News() {
 
     /*
     |--------------------------------------------------------------------------
-    | Page Change
+    | PAGINATION
     |--------------------------------------------------------------------------
     */
 
+    const totalPages =
+        Math.max(
+            1,
+            Math.ceil(
+                total /
+                    PAGE_SIZE
+            )
+        );
+
     const changePage =
-        async (
-            nextPage
-        ) => {
+        async (nextPage) => {
             if (
-                nextPage < 1
-            ) {
-                return;
-            }
-
-            const totalPages =
-                Math.max(
-                    1,
-                    Math.ceil(
-                        total /
-                            PAGE_SIZE
-                    )
-                );
-
-            if (
+                nextPage < 1 ||
                 nextPage >
-                totalPages
+                    totalPages
             ) {
                 return;
             }
@@ -1232,19 +1829,35 @@ export default function News() {
 
             window.scrollTo({
                 top: 0,
-                behavior:
-                    "smooth",
+                behavior: "smooth",
             });
         };
 
     /*
     |--------------------------------------------------------------------------
-    | Open Article
+    | OPEN ARTICLE
     |--------------------------------------------------------------------------
     */
 
     const openArticle =
         (article) => {
+            if (!article) {
+                return;
+            }
+
+            const articleId =
+                getArticleId(
+                    article
+                );
+
+            console.log(
+                "OPEN ARTICLE:",
+                {
+                    article,
+                    articleId,
+                }
+            );
+
             setSelectedArticle(
                 article
             );
@@ -1256,11 +1869,34 @@ export default function News() {
             setMcqVisible(
                 false
             );
+
+            /*
+             * Automatically load/generate MCQs.
+             *
+             * This makes "Read & MCQs"
+             * work immediately.
+             */
+
+            if (articleId) {
+                loadArticleMCQs(
+                    articleId
+                );
+            } else {
+                setMcqVisible(
+                    true
+                );
+
+                setMcqError(
+                    language === "hi"
+                        ? "Article ID उपलब्ध नहीं है।"
+                        : "Article ID is missing."
+                );
+            }
         };
 
     /*
     |--------------------------------------------------------------------------
-    | Close Article
+    | CLOSE
     |--------------------------------------------------------------------------
     */
 
@@ -1281,7 +1917,7 @@ export default function News() {
 
     /*
     |--------------------------------------------------------------------------
-    | Format Date
+    | DATE
     |--------------------------------------------------------------------------
     */
 
@@ -1292,11 +1928,19 @@ export default function News() {
             }
 
             try {
-                return new Date(
-                    value
-                ).toLocaleDateString(
-                    language ===
-                        "hi"
+                const date =
+                    new Date(value);
+
+                if (
+                    Number.isNaN(
+                        date.getTime()
+                    )
+                ) {
+                    return "";
+                }
+
+                return date.toLocaleDateString(
+                    language === "hi"
                         ? "hi-IN"
                         : "en-IN",
                     {
@@ -1310,63 +1954,161 @@ export default function News() {
             }
         };
 
+    const user =
+        getUser();
+
     /*
     |--------------------------------------------------------------------------
-    | UI
+    | TRANSLATIONS
     |--------------------------------------------------------------------------
     */
 
-    const totalPages =
-        Math.max(
-            1,
-            Math.ceil(
-                total /
-                    PAGE_SIZE
-            )
-        );
+    const t = {
+        title:
+            language === "hi"
+                ? "समसामयिकी"
+                : "Current Affairs",
 
-    const user =
-        getUser();
+        subtitle:
+            language === "hi"
+                ? "UPSC एवं BPSC की तैयारी के लिए AI-क्यूरेटेड समसामयिकी"
+                : "AI-curated current affairs for UPSC & BPSC preparation",
+
+        search:
+            language === "hi"
+                ? "खोजें"
+                : "Search News",
+
+        searchPlaceholder:
+            language === "hi"
+                ? "Current Affairs खोजें..."
+                : "Search current affairs...",
+
+        exam:
+            language === "hi"
+                ? "परीक्षा"
+                : "Exam",
+
+        language:
+            language === "hi"
+                ? "भाषा"
+                : "Language",
+
+        category:
+            language === "hi"
+                ? "श्रेणी"
+                : "Category",
+
+        bihar:
+            language === "hi"
+                ? "केवल बिहार"
+                : "Bihar Only",
+
+        reset:
+            language === "hi"
+                ? "रीसेट"
+                : "Reset",
+
+        readMcq:
+            language === "hi"
+                ? "पढ़ें और MCQs"
+                : "Read & MCQs",
+
+        source:
+            language === "hi"
+                ? "स्रोत"
+                : "Source",
+
+        previous:
+            language === "hi"
+                ? "← पिछला"
+                : "← Previous",
+
+        next:
+            language === "hi"
+                ? "अगला →"
+                : "Next →",
+
+        loading:
+            language === "hi"
+                ? "लोड हो रहा है..."
+                : "Loading...",
+
+        noNews:
+            language === "hi"
+                ? "कोई Current Affairs नहीं मिला।"
+                : "No current affairs found.",
+
+        mcqPractice:
+            language === "hi"
+                ? "MCQ अभ्यास"
+                : "MCQ Practice",
+
+        generateMcq:
+            language === "hi"
+                ? "MCQs Generate / View करें"
+                : "Generate / View MCQs",
+
+        mcqLoading:
+            language === "hi"
+                ? "MCQs Generate हो रहे हैं..."
+                : "Generating MCQs...",
+
+        noMcq:
+            language === "hi"
+                ? "इस article के लिए अभी MCQs उपलब्ध नहीं हैं।"
+                : "No MCQs are currently available for this article.",
+
+        explanation:
+            language === "hi"
+                ? "व्याख्या:"
+                : "Explanation:",
+
+        answer:
+            language === "hi"
+                ? "सही उत्तर:"
+                : "Answer:",
+
+        openSource:
+            language === "hi"
+                ? "Source खोलें"
+                : "Open Source",
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | RENDER
+    |--------------------------------------------------------------------------
+    */
 
     return (
         <div
             style={{
-                minHeight:
-                    "100vh",
-                background:
-                    "#f8fafc",
-                color:
-                    "#0f172a",
-                paddingBottom:
-                    50,
+                minHeight: "100vh",
+                background: "#f8fafc",
+                color: "#0f172a",
+                paddingBottom: 60,
             }}
         >
-            {/* ======================================================
-                HEADER
-            ====================================================== */}
+            {/* HEADER */}
 
             <header
                 style={{
-                    background:
-                        "#ffffff",
+                    background: "#ffffff",
                     borderBottom:
                         "1px solid #e2e8f0",
-                    position:
-                        "sticky",
+                    position: "sticky",
                     top: 0,
                     zIndex: 20,
                 }}
             >
                 <div
                     style={{
-                        maxWidth:
-                            1200,
-                        margin:
-                            "0 auto",
+                        maxWidth: 1200,
+                        margin: "0 auto",
                         padding:
                             "16px 20px",
-                        display:
-                            "flex",
+                        display: "flex",
                         alignItems:
                             "center",
                         justifyContent:
@@ -1378,10 +2120,8 @@ export default function News() {
                         <h1
                             style={{
                                 margin: 0,
-                                fontSize:
-                                    24,
-                                fontWeight:
-                                    800,
+                                fontSize: 24,
+                                fontWeight: 800,
                             }}
                         >
                             Muni48
@@ -1389,24 +2129,19 @@ export default function News() {
 
                         <div
                             style={{
-                                fontSize:
-                                    13,
+                                fontSize: 13,
                                 color:
                                     "#64748b",
-                                marginTop:
-                                    2,
+                                marginTop: 3,
                             }}
                         >
-                            UPSC & BPSC
-                            Current
-                            Affairs
+                            {t.title}
                         </div>
                     </div>
 
                     <div
                         style={{
-                            display:
-                                "flex",
+                            display: "flex",
                             alignItems:
                                 "center",
                             gap: 10,
@@ -1414,8 +2149,7 @@ export default function News() {
                     >
                         <span
                             style={{
-                                fontSize:
-                                    13,
+                                fontSize: 13,
                                 color:
                                     "#64748b",
                             }}
@@ -1435,10 +2169,8 @@ export default function News() {
                                         999,
                                     padding:
                                         "6px 10px",
-                                    fontSize:
-                                        12,
-                                    fontWeight:
-                                        700,
+                                    fontSize: 12,
+                                    fontWeight: 700,
                                 }}
                             >
                                 ✓ Access
@@ -1448,23 +2180,17 @@ export default function News() {
                 </div>
             </header>
 
-            {/* ======================================================
-                MAIN
-            ====================================================== */}
+            {/* MAIN */}
 
             <main
                 style={{
-                    maxWidth:
-                        1200,
-                    margin:
-                        "0 auto",
+                    maxWidth: 1200,
+                    margin: "0 auto",
                     padding:
                         "24px 20px",
                 }}
             >
-                {/* ==================================================
-                    FILTER CARD
-                ================================================== */}
+                {/* FILTER */}
 
                 <section
                     style={{
@@ -1472,12 +2198,9 @@ export default function News() {
                             "#ffffff",
                         border:
                             "1px solid #e2e8f0",
-                        borderRadius:
-                            16,
-                        padding:
-                            20,
-                        marginBottom:
-                            20,
+                        borderRadius: 16,
+                        padding: 20,
+                        marginBottom: 20,
                     }}
                 >
                     <form
@@ -1494,7 +2217,7 @@ export default function News() {
                                 gap: 12,
                             }}
                         >
-                            {/* Search */}
+                            {/* SEARCH */}
 
                             <div
                                 style={{
@@ -1506,15 +2229,14 @@ export default function News() {
                                     style={{
                                         display:
                                             "block",
-                                        fontSize:
-                                            13,
+                                        fontSize: 13,
                                         fontWeight:
                                             700,
                                         marginBottom:
                                             6,
                                     }}
                                 >
-                                    Search
+                                    {t.search}
                                 </label>
 
                                 <input
@@ -1522,15 +2244,17 @@ export default function News() {
                                         query
                                     }
                                     onChange={(
-                                        e
+                                        event
                                     ) =>
                                         setQuery(
-                                            e
+                                            event
                                                 .target
                                                 .value
                                         )
                                     }
-                                    placeholder="Search current affairs..."
+                                    placeholder={
+                                        t.searchPlaceholder
+                                    }
                                     style={{
                                         width:
                                             "100%",
@@ -1548,22 +2272,21 @@ export default function News() {
                                 />
                             </div>
 
-                            {/* Exam */}
+                            {/* EXAM */}
 
                             <div>
                                 <label
                                     style={{
                                         display:
                                             "block",
-                                        fontSize:
-                                            13,
+                                        fontSize: 13,
                                         fontWeight:
                                             700,
                                         marginBottom:
                                             6,
                                     }}
                                 >
-                                    Exam
+                                    {t.exam}
                                 </label>
 
                                 <select
@@ -1571,15 +2294,24 @@ export default function News() {
                                         exam
                                     }
                                     onChange={(
-                                        e
+                                        event
                                     ) => {
                                         setExam(
-                                            e
+                                            event
                                                 .target
                                                 .value
                                         );
+
                                         setPage(
                                             1
+                                        );
+
+                                        setMcqs(
+                                            []
+                                        );
+
+                                        setMcqVisible(
+                                            false
                                         );
                                     }}
                                     style={{
@@ -1616,22 +2348,21 @@ export default function News() {
                                 </select>
                             </div>
 
-                            {/* Language */}
+                            {/* LANGUAGE */}
 
                             <div>
                                 <label
                                     style={{
                                         display:
                                             "block",
-                                        fontSize:
-                                            13,
+                                        fontSize: 13,
                                         fontWeight:
                                             700,
                                         marginBottom:
                                             6,
                                     }}
                                 >
-                                    Language
+                                    {t.language}
                                 </label>
 
                                 <select
@@ -1639,14 +2370,30 @@ export default function News() {
                                         language
                                     }
                                     onChange={(
-                                        e
-                                    ) =>
+                                        event
+                                    ) => {
                                         setLanguage(
-                                            e
+                                            event
                                                 .target
                                                 .value
-                                        )
-                                    }
+                                        );
+
+                                        setPage(
+                                            1
+                                        );
+
+                                        setMcqs(
+                                            []
+                                        );
+
+                                        setMcqVisible(
+                                            false
+                                        );
+
+                                        setMcqError(
+                                            ""
+                                        );
+                                    }}
                                     style={{
                                         width:
                                             "100%",
@@ -1681,22 +2428,21 @@ export default function News() {
                                 </select>
                             </div>
 
-                            {/* Category */}
+                            {/* CATEGORY */}
 
                             <div>
                                 <label
                                     style={{
                                         display:
                                             "block",
-                                        fontSize:
-                                            13,
+                                        fontSize: 13,
                                         fontWeight:
                                             700,
                                         marginBottom:
                                             6,
                                     }}
                                 >
-                                    Category
+                                    {t.category}
                                 </label>
 
                                 <select
@@ -1704,14 +2450,18 @@ export default function News() {
                                         category
                                     }
                                     onChange={(
-                                        e
-                                    ) =>
+                                        event
+                                    ) => {
                                         setCategory(
-                                            e
+                                            event
                                                 .target
                                                 .value
-                                        )
-                                    }
+                                        );
+
+                                        setPage(
+                                            1
+                                        );
+                                    }}
                                     style={{
                                         width:
                                             "100%",
@@ -1726,7 +2476,10 @@ export default function News() {
                                     }}
                                 >
                                     <option value="">
-                                        All Categories
+                                        {language ===
+                                        "hi"
+                                            ? "सभी श्रेणियाँ"
+                                            : "All Categories"}
                                     </option>
 
                                     {CATEGORIES.map(
@@ -1750,7 +2503,7 @@ export default function News() {
                                 </select>
                             </div>
 
-                            {/* Bihar */}
+                            {/* BIHAR */}
 
                             <div
                                 style={{
@@ -1767,8 +2520,7 @@ export default function News() {
                                         alignItems:
                                             "center",
                                         gap: 8,
-                                        fontSize:
-                                            14,
+                                        fontSize: 14,
                                         fontWeight:
                                             600,
                                         cursor:
@@ -1783,28 +2535,32 @@ export default function News() {
                                             biharOnly
                                         }
                                         onChange={(
-                                            e
-                                        ) =>
+                                            event
+                                        ) => {
                                             setBiharOnly(
-                                                e
+                                                event
                                                     .target
                                                     .checked
-                                            )
-                                        }
+                                            );
+
+                                            setPage(
+                                                1
+                                            );
+                                        }}
                                     />
 
-                                    Bihar Only
+                                    {t.bihar}
                                 </label>
                             </div>
                         </div>
 
                         <div
                             style={{
-                                marginTop:
-                                    16,
-                                display:
-                                    "flex",
+                                marginTop: 16,
+                                display: "flex",
                                 gap: 10,
+                                flexWrap:
+                                    "wrap",
                             }}
                         >
                             <button
@@ -1814,8 +2570,7 @@ export default function News() {
                                     paymentLoading
                                 }
                                 style={{
-                                    border:
-                                        0,
+                                    border: 0,
                                     borderRadius:
                                         10,
                                     padding:
@@ -1827,7 +2582,10 @@ export default function News() {
                                     fontWeight:
                                         700,
                                     cursor:
-                                        "pointer",
+                                        loading ||
+                                        paymentLoading
+                                            ? "not-allowed"
+                                            : "pointer",
                                     opacity:
                                         loading ||
                                         paymentLoading
@@ -1836,21 +2594,43 @@ export default function News() {
                                 }}
                             >
                                 {loading
-                                    ? "Loading..."
-                                    : "Search News"}
+                                    ? t.loading
+                                    : t.search}
                             </button>
 
                             <button
                                 type="button"
+                                disabled={
+                                    loading ||
+                                    paymentLoading
+                                }
                                 onClick={() => {
                                     setQuery(
                                         "India"
                                     );
+
                                     setCategory(
                                         ""
                                     );
+
                                     setBiharOnly(
                                         false
+                                    );
+
+                                    setPage(
+                                        1
+                                    );
+
+                                    setMcqs(
+                                        []
+                                    );
+
+                                    setMcqVisible(
+                                        false
+                                    );
+
+                                    setMcqError(
+                                        ""
                                     );
                                 }}
                                 style={{
@@ -1868,15 +2648,13 @@ export default function News() {
                                         600,
                                 }}
                             >
-                                Reset
+                                {t.reset}
                             </button>
                         </div>
                     </form>
                 </section>
 
-                {/* ==================================================
-                    PAYMENT STATUS
-                ================================================== */}
+                {/* PAYMENT MESSAGE */}
 
                 {paymentMessage && (
                     <div
@@ -1891,26 +2669,19 @@ export default function News() {
                                 12,
                             padding:
                                 "12px 15px",
-                            marginBottom:
-                                18,
-                            fontSize:
-                                14,
-                            fontWeight:
-                                600,
+                            marginBottom: 18,
+                            fontSize: 14,
+                            fontWeight: 600,
                         }}
                     >
                         {paymentLoading
                             ? "💳 "
                             : "ℹ️ "}
-                        {
-                            paymentMessage
-                        }
+                        {paymentMessage}
                     </div>
                 )}
 
-                {/* ==================================================
-                    ERROR
-                ================================================== */}
+                {/* ERROR */}
 
                 {error && (
                     <div
@@ -1923,20 +2694,20 @@ export default function News() {
                                 "#991b1b",
                             borderRadius:
                                 12,
-                            padding:
-                                14,
-                            marginBottom:
-                                18,
+                            padding: 14,
+                            marginBottom: 18,
                         }}
                     >
                         <strong>
-                            News लोड नहीं हो सके
+                            {language ===
+                            "hi"
+                                ? "News लोड नहीं हो सके"
+                                : "News could not be loaded"}
                         </strong>
 
                         <div
                             style={{
-                                marginTop:
-                                    5,
+                                marginTop: 5,
                             }}
                         >
                             {error}
@@ -1953,10 +2724,8 @@ export default function News() {
                                 )
                             }
                             style={{
-                                marginTop:
-                                    10,
-                                border:
-                                    0,
+                                marginTop: 10,
+                                border: 0,
                                 borderRadius:
                                     8,
                                 padding:
@@ -1969,33 +2738,31 @@ export default function News() {
                                     "pointer",
                             }}
                         >
-                            दोबारा प्रयास करें
+                            {language ===
+                            "hi"
+                                ? "दोबारा प्रयास करें"
+                                : "Retry"}
                         </button>
                     </div>
                 )}
 
-                {/* ==================================================
-                    LOADING
-                ================================================== */}
+                {/* LOADING */}
 
                 {loading && (
                     <div
                         style={{
                             textAlign:
                                 "center",
-                            padding:
-                                40,
+                            padding: 40,
                             color:
                                 "#64748b",
                         }}
                     >
-                        News loading...
+                        {t.loading}
                     </div>
                 )}
 
-                {/* ==================================================
-                    EMPTY
-                ================================================== */}
+                {/* EMPTY */}
 
                 {!loading &&
                     !error &&
@@ -2009,22 +2776,18 @@ export default function News() {
                                     "1px solid #e2e8f0",
                                 borderRadius:
                                     16,
-                                padding:
-                                    40,
+                                padding: 40,
                                 textAlign:
                                     "center",
                                 color:
                                     "#64748b",
                             }}
                         >
-                            कोई Current Affairs
-                            नहीं मिला।
+                            {t.noNews}
                         </div>
                     )}
 
-                {/* ==================================================
-                    ARTICLE LIST
-                ================================================== */}
+                {/* ARTICLES */}
 
                 {!loading &&
                     articles.length >
@@ -2040,128 +2803,88 @@ export default function News() {
                                 (
                                     article,
                                     index
-                                ) => (
-                                    <article
-                                        key={
-                                            article.id ||
-                                            article.url ||
-                                            index
-                                        }
-                                        style={{
-                                            background:
-                                                "#ffffff",
-                                            border:
-                                                "1px solid #e2e8f0",
-                                            borderRadius:
-                                                16,
-                                            overflow:
-                                                "hidden",
-                                        }}
-                                    >
-                                        <div
+                                ) => {
+                                    const articleId =
+                                        getArticleId(
+                                            article
+                                        );
+
+                                    return (
+                                        <article
+                                            key={
+                                                articleId ||
+                                                article.url ||
+                                                index
+                                            }
                                             style={{
-                                                display:
-                                                    "flex",
-                                                gap: 18,
-                                                padding:
-                                                    18,
+                                                background:
+                                                    "#ffffff",
+                                                border:
+                                                    "1px solid #e2e8f0",
+                                                borderRadius:
+                                                    16,
+                                                overflow:
+                                                    "hidden",
                                             }}
                                         >
-                                            {article.image_url && (
-                                                <img
-                                                    src={
-                                                        article.image_url
-                                                    }
-                                                    alt=""
-                                                    style={{
-                                                        width:
-                                                            150,
-                                                        height:
-                                                            100,
-                                                        objectFit:
-                                                            "cover",
-                                                        borderRadius:
-                                                            10,
-                                                        flexShrink:
-                                                            0,
-                                                    }}
-                                                    onError={(
-                                                        e
-                                                    ) => {
-                                                        e.currentTarget.style.display =
-                                                            "none";
-                                                    }}
-                                                />
-                                            )}
-
                                             <div
                                                 style={{
-                                                    flex: 1,
-                                                    minWidth:
-                                                        0,
+                                                    display:
+                                                        "flex",
+                                                    gap: 18,
+                                                    padding:
+                                                        18,
                                                 }}
                                             >
+                                                {article.image_url && (
+                                                    <img
+                                                        src={
+                                                            article.image_url
+                                                        }
+                                                        alt=""
+                                                        style={{
+                                                            width: 150,
+                                                            height: 100,
+                                                            objectFit:
+                                                                "cover",
+                                                            borderRadius:
+                                                                10,
+                                                            flexShrink:
+                                                                0,
+                                                        }}
+                                                        onError={(
+                                                            event
+                                                        ) => {
+                                                            event.currentTarget.style.display =
+                                                                "none";
+                                                        }}
+                                                    />
+                                                )}
+
                                                 <div
                                                     style={{
-                                                        display:
-                                                            "flex",
-                                                        flexWrap:
-                                                            "wrap",
-                                                        gap: 7,
-                                                        marginBottom:
-                                                            8,
+                                                        flex: 1,
+                                                        minWidth:
+                                                            0,
                                                     }}
                                                 >
-                                                    <span
+                                                    <div
                                                         style={{
-                                                            background:
-                                                                "#dbeafe",
-                                                            color:
-                                                                "#1d4ed8",
-                                                            borderRadius:
-                                                                999,
-                                                            padding:
-                                                                "4px 9px",
-                                                            fontSize:
-                                                                11,
-                                                            fontWeight:
-                                                                700,
+                                                            display:
+                                                                "flex",
+                                                            flexWrap:
+                                                                "wrap",
+                                                            gap: 7,
+                                                            marginBottom:
+                                                                8,
                                                         }}
                                                     >
-                                                        {
-                                                            article.exam
-                                                        }
-                                                    </span>
-
-                                                    <span
-                                                        style={{
-                                                            background:
-                                                                "#f1f5f9",
-                                                            color:
-                                                                "#475569",
-                                                            borderRadius:
-                                                                999,
-                                                            padding:
-                                                                "4px 9px",
-                                                            fontSize:
-                                                                11,
-                                                            fontWeight:
-                                                                700,
-                                                        }}
-                                                    >
-                                                        {
-                                                            article.category ||
-                                                            "General"
-                                                        }
-                                                    </span>
-
-                                                    {article.bihar_relevant && (
                                                         <span
                                                             style={{
                                                                 background:
-                                                                    "#dcfce7",
+                                                                    "#dbeafe",
                                                                 color:
-                                                                    "#166534",
+                                                                    "#1d4ed8",
                                                                 borderRadius:
                                                                     999,
                                                                 padding:
@@ -2172,151 +2895,202 @@ export default function News() {
                                                                     700,
                                                             }}
                                                         >
-                                                            Bihar
+                                                            {article.exam ||
+                                                                exam}
                                                         </span>
-                                                    )}
-                                                </div>
 
-                                                <h2
-                                                    style={{
-                                                        margin:
-                                                            "0 0 8px",
-                                                        fontSize:
-                                                            19,
-                                                        lineHeight:
-                                                            1.4,
-                                                    }}
-                                                >
-                                                    {
-                                                        article.title
-                                                    }
-                                                </h2>
+                                                        <span
+                                                            style={{
+                                                                background:
+                                                                    "#f1f5f9",
+                                                                color:
+                                                                    "#475569",
+                                                                borderRadius:
+                                                                    999,
+                                                                padding:
+                                                                    "4px 9px",
+                                                                fontSize:
+                                                                    11,
+                                                                fontWeight:
+                                                                    700,
+                                                            }}
+                                                        >
+                                                            {article.category ||
+                                                                "General"}
+                                                        </span>
 
-                                                {article.description && (
-                                                    <p
+                                                        {article.bihar_relevant && (
+                                                            <span
+                                                                style={{
+                                                                    background:
+                                                                        "#dcfce7",
+                                                                    color:
+                                                                        "#166534",
+                                                                    borderRadius:
+                                                                        999,
+                                                                    padding:
+                                                                        "4px 9px",
+                                                                    fontSize:
+                                                                        11,
+                                                                    fontWeight:
+                                                                        700,
+                                                                }}
+                                                            >
+                                                                Bihar
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <h2
                                                         style={{
                                                             margin:
-                                                                "0 0 10px",
-                                                            color:
-                                                                "#475569",
-                                                            lineHeight:
-                                                                1.6,
-                                                        }}
-                                                    >
-                                                        {
-                                                            article.description
-                                                        }
-                                                    </p>
-                                                )}
-
-                                                <div
-                                                    style={{
-                                                        display:
-                                                            "flex",
-                                                        flexWrap:
-                                                            "wrap",
-                                                        alignItems:
-                                                            "center",
-                                                        justifyContent:
-                                                            "space-between",
-                                                        gap: 10,
-                                                    }}
-                                                >
-                                                    <div
-                                                        style={{
+                                                                "0 0 8px",
                                                             fontSize:
-                                                                12,
-                                                            color:
-                                                                "#64748b",
+                                                                19,
+                                                            lineHeight:
+                                                                1.4,
                                                         }}
                                                     >
-                                                        {article.source &&
-                                                            `${article.source} • `}
                                                         {
-                                                            formatDate(
-                                                                article.published_at
-                                                            )
+                                                            article.title
                                                         }
-                                                    </div>
+                                                    </h2>
+
+                                                    {article.description && (
+                                                        <p
+                                                            style={{
+                                                                margin:
+                                                                    "0 0 10px",
+                                                                color:
+                                                                    "#475569",
+                                                                lineHeight:
+                                                                    1.6,
+                                                            }}
+                                                        >
+                                                            {
+                                                                article.description
+                                                            }
+                                                        </p>
+                                                    )}
 
                                                     <div
                                                         style={{
                                                             display:
                                                                 "flex",
-                                                            gap: 8,
+                                                            flexWrap:
+                                                                "wrap",
+                                                            alignItems:
+                                                                "center",
+                                                            justifyContent:
+                                                                "space-between",
+                                                            gap: 10,
                                                         }}
                                                     >
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                openArticle(
-                                                                    article
-                                                                )
-                                                            }
+                                                        <div
                                                             style={{
-                                                                border:
-                                                                    "1px solid #2563eb",
+                                                                fontSize:
+                                                                    12,
                                                                 color:
-                                                                    "#2563eb",
-                                                                background:
-                                                                    "#ffffff",
-                                                                borderRadius:
-                                                                    8,
-                                                                padding:
-                                                                    "8px 12px",
-                                                                cursor:
-                                                                    "pointer",
-                                                                fontWeight:
-                                                                    700,
+                                                                    "#64748b",
                                                             }}
                                                         >
-                                                            Read & MCQs
-                                                        </button>
+                                                            {article.source &&
+                                                                `${article.source} • `}
 
-                                                        {article.url && (
-                                                            <a
-                                                                href={
-                                                                    article.url
+                                                            {formatDate(
+                                                                article.published_at
+                                                            )}
+                                                        </div>
+
+                                                        <div
+                                                            style={{
+                                                                display:
+                                                                    "flex",
+                                                                gap: 8,
+                                                                flexWrap:
+                                                                    "wrap",
+                                                            }}
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                disabled={
+                                                                    paymentLoading ||
+                                                                    !articleId
                                                                 }
-                                                                target="_blank"
-                                                                rel="noreferrer"
+                                                                onClick={() =>
+                                                                    openArticle(
+                                                                        article
+                                                                    )
+                                                                }
                                                                 style={{
                                                                     border:
-                                                                        "1px solid #cbd5e1",
+                                                                        "1px solid #2563eb",
                                                                     color:
-                                                                        "#334155",
+                                                                        "#2563eb",
                                                                     background:
                                                                         "#ffffff",
                                                                     borderRadius:
                                                                         8,
                                                                     padding:
                                                                         "8px 12px",
-                                                                    textDecoration:
-                                                                        "none",
+                                                                    cursor:
+                                                                        paymentLoading ||
+                                                                        !articleId
+                                                                            ? "not-allowed"
+                                                                            : "pointer",
                                                                     fontWeight:
-                                                                        600,
+                                                                        700,
+                                                                    opacity:
+                                                                        !articleId
+                                                                            ? 0.5
+                                                                            : 1,
                                                                 }}
                                                             >
-                                                                Source
-                                                            </a>
-                                                        )}
+                                                                {t.readMcq}
+                                                            </button>
+
+                                                            {article.url && (
+                                                                <a
+                                                                    href={
+                                                                        article.url
+                                                                    }
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    style={{
+                                                                        border:
+                                                                            "1px solid #cbd5e1",
+                                                                        color:
+                                                                            "#334155",
+                                                                        background:
+                                                                            "#ffffff",
+                                                                        borderRadius:
+                                                                            8,
+                                                                        padding:
+                                                                            "8px 12px",
+                                                                        textDecoration:
+                                                                            "none",
+                                                                        fontWeight:
+                                                                            600,
+                                                                    }}
+                                                                >
+                                                                    {t.source}
+                                                                </a>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </article>
-                                )
+                                        </article>
+                                    );
+                                }
                             )}
                         </div>
                     )}
 
-                {/* ==================================================
-                    PAGINATION
-                ================================================== */}
+                {/* PAGINATION */}
 
                 {!loading &&
-                    totalPages >
-                        1 && (
+                    totalPages > 1 && (
                         <div
                             style={{
                                 display:
@@ -2326,20 +3100,20 @@ export default function News() {
                                 alignItems:
                                     "center",
                                 gap: 10,
-                                marginTop:
-                                    24,
+                                marginTop: 24,
                             }}
                         >
                             <button
                                 type="button"
                                 disabled={
                                     page <=
-                                    1
+                                        1 ||
+                                    loading ||
+                                    paymentLoading
                                 }
                                 onClick={() =>
                                     changePage(
-                                        page -
-                                            1
+                                        page - 1
                                     )
                                 }
                                 style={{
@@ -2352,13 +3126,10 @@ export default function News() {
                                     background:
                                         "#ffffff",
                                     cursor:
-                                        page <=
-                                        1
-                                            ? "not-allowed"
-                                            : "pointer",
+                                        "pointer",
                                 }}
                             >
-                                ← Previous
+                                {t.previous}
                             </button>
 
                             <span
@@ -2379,12 +3150,13 @@ export default function News() {
                                 type="button"
                                 disabled={
                                     page >=
-                                    totalPages
+                                        totalPages ||
+                                    loading ||
+                                    paymentLoading
                                 }
                                 onClick={() =>
                                     changePage(
-                                        page +
-                                            1
+                                        page + 1
                                     )
                                 }
                                 style={{
@@ -2397,33 +3169,28 @@ export default function News() {
                                     background:
                                         "#ffffff",
                                     cursor:
-                                        page >=
-                                        totalPages
-                                            ? "not-allowed"
-                                            : "pointer",
+                                        "pointer",
                                 }}
                             >
-                                Next →
+                                {t.next}
                             </button>
                         </div>
                     )}
             </main>
 
-            {/* ======================================================
-                ARTICLE MODAL
-            ====================================================== */}
+            {/* ==========================================================
+                ARTICLE + MCQ MODAL
+            ========================================================== */}
 
             {selectedArticle && (
                 <div
                     style={{
-                        position:
-                            "fixed",
+                        position: "fixed",
                         inset: 0,
                         background:
                             "rgba(15,23,42,0.65)",
                         zIndex: 100,
-                        display:
-                            "flex",
+                        display: "flex",
                         alignItems:
                             "center",
                         justifyContent:
@@ -2446,15 +3213,18 @@ export default function News() {
                                 "#ffffff",
                             borderRadius:
                                 18,
-                            padding:
-                                24,
+                            padding: 24,
+                            boxSizing:
+                                "border-box",
                         }}
                         onClick={(
-                            e
+                            event
                         ) =>
-                            e.stopPropagation()
+                            event.stopPropagation()
                         }
                     >
+                        {/* HEADER */}
+
                         <div
                             style={{
                                 display:
@@ -2466,7 +3236,11 @@ export default function News() {
                                     "flex-start",
                             }}
                         >
-                            <div>
+                            <div
+                                style={{
+                                    minWidth: 0,
+                                }}
+                            >
                                 <div
                                     style={{
                                         fontSize:
@@ -2478,11 +3252,13 @@ export default function News() {
                                     }}
                                 >
                                     {
-                                        selectedArticle.category
+                                        selectedArticle.category ||
+                                        "General"
                                     }{" "}
                                     •{" "}
                                     {
-                                        selectedArticle.exam
+                                        selectedArticle.exam ||
+                                        exam
                                     }
                                 </div>
 
@@ -2506,25 +3282,26 @@ export default function News() {
                                     closeArticle
                                 }
                                 style={{
-                                    border:
-                                        0,
+                                    border: 0,
                                     background:
                                         "#f1f5f9",
                                     borderRadius:
                                         8,
-                                    width:
-                                        36,
-                                    height:
-                                        36,
+                                    width: 36,
+                                    height: 36,
                                     cursor:
                                         "pointer",
                                     fontSize:
                                         20,
+                                    flexShrink:
+                                        0,
                                 }}
                             >
                                 ×
                             </button>
                         </div>
+
+                        {/* IMAGE */}
 
                         {selectedArticle.image_url && (
                             <img
@@ -2544,8 +3321,16 @@ export default function News() {
                                     marginTop:
                                         18,
                                 }}
+                                onError={(
+                                    event
+                                ) => {
+                                    event.currentTarget.style.display =
+                                        "none";
+                                }}
                             />
                         )}
+
+                        {/* DESCRIPTION */}
 
                         {selectedArticle.description && (
                             <p
@@ -2564,6 +3349,8 @@ export default function News() {
                             </p>
                         )}
 
+                        {/* MCQ BUTTON */}
+
                         <div
                             style={{
                                 display:
@@ -2581,14 +3368,18 @@ export default function News() {
                                     mcqLoading ||
                                     paymentLoading
                                 }
-                                onClick={() =>
+                                onClick={() => {
+                                    const id =
+                                        getArticleId(
+                                            selectedArticle
+                                        );
+
                                     loadArticleMCQs(
-                                        selectedArticle.id
-                                    )
-                                }
+                                        id
+                                    );
+                                }}
                                 style={{
-                                    border:
-                                        0,
+                                    border: 0,
                                     background:
                                         "#2563eb",
                                     color:
@@ -2598,7 +3389,10 @@ export default function News() {
                                     padding:
                                         "10px 16px",
                                     cursor:
-                                        "pointer",
+                                        mcqLoading ||
+                                        paymentLoading
+                                            ? "not-allowed"
+                                            : "pointer",
                                     fontWeight:
                                         700,
                                     opacity:
@@ -2609,8 +3403,8 @@ export default function News() {
                                 }}
                             >
                                 {mcqLoading
-                                    ? "MCQs Loading..."
-                                    : "Generate / View MCQs"}
+                                    ? t.mcqLoading
+                                    : t.generateMcq}
                             </button>
 
                             {selectedArticle.url && (
@@ -2635,10 +3429,14 @@ export default function News() {
                                             700,
                                     }}
                                 >
-                                    Open Source
+                                    {
+                                        t.openSource
+                                    }
                                 </a>
                             )}
                         </div>
+
+                        {/* MCQ ERROR */}
 
                         {mcqError && (
                             <div
@@ -2651,17 +3449,60 @@ export default function News() {
                                         "1px solid #fecaca",
                                     borderRadius:
                                         10,
-                                    padding:
-                                        12,
+                                    padding: 12,
                                     marginTop:
                                         16,
                                 }}
                             >
-                                {
-                                    mcqError
-                                }
+                                <div>
+                                    {
+                                        mcqError
+                                    }
+                                </div>
+
+                                <button
+                                    type="button"
+                                    disabled={
+                                        paymentLoading ||
+                                        mcqLoading
+                                    }
+                                    onClick={() => {
+                                        const id =
+                                            getArticleId(
+                                                selectedArticle
+                                            );
+
+                                        loadArticleMCQs(
+                                            id
+                                        );
+                                    }}
+                                    style={{
+                                        display:
+                                            "block",
+                                        marginTop:
+                                            10,
+                                        border: 0,
+                                        background:
+                                            "#991b1b",
+                                        color:
+                                            "#ffffff",
+                                        borderRadius:
+                                            8,
+                                        padding:
+                                            "7px 12px",
+                                        cursor:
+                                            "pointer",
+                                    }}
+                                >
+                                    {language ===
+                                    "hi"
+                                        ? "MCQ फिर से Generate करें"
+                                        : "Retry MCQs"}
+                                </button>
                             </div>
                         )}
+
+                        {/* MCQ SECTION */}
 
                         {mcqVisible && (
                             <section
@@ -2670,12 +3511,72 @@ export default function News() {
                                         24,
                                 }}
                             >
-                                <h3>
-                                    MCQ Practice
-                                </h3>
+                                <div
+                                    style={{
+                                        display:
+                                            "flex",
+                                        justifyContent:
+                                            "space-between",
+                                        alignItems:
+                                            "center",
+                                        gap: 10,
+                                        marginBottom:
+                                            14,
+                                    }}
+                                >
+                                    <h3
+                                        style={{
+                                            margin:
+                                                0,
+                                        }}
+                                    >
+                                        {
+                                            t.mcqPractice
+                                        }
+                                    </h3>
 
-                                {mcqs.length ===
-                                0 ? (
+                                    <span
+                                        style={{
+                                            background:
+                                                "#dbeafe",
+                                            color:
+                                                "#1d4ed8",
+                                            borderRadius:
+                                                999,
+                                            padding:
+                                                "5px 10px",
+                                            fontSize:
+                                                12,
+                                            fontWeight:
+                                                700,
+                                        }}
+                                    >
+                                        {language ===
+                                        "hi"
+                                            ? "हिंदी"
+                                            : "English"}
+                                    </span>
+                                </div>
+
+                                {mcqLoading ? (
+                                    <div
+                                        style={{
+                                            background:
+                                                "#f8fafc",
+                                            borderRadius:
+                                                10,
+                                            padding:
+                                                25,
+                                            textAlign:
+                                                "center",
+                                            color:
+                                                "#64748b",
+                                        }}
+                                    >
+                                        {t.mcqLoading}
+                                    </div>
+                                ) : mcqs.length ===
+                                  0 ? (
                                     <div
                                         style={{
                                             background:
@@ -2688,9 +3589,9 @@ export default function News() {
                                                 "#64748b",
                                         }}
                                     >
-                                        इस article के
-                                        लिए अभी MCQs
-                                        उपलब्ध नहीं हैं।
+                                        {
+                                            t.noMcq
+                                        }
                                     </div>
                                 ) : (
                                     <div
@@ -2708,7 +3609,8 @@ export default function News() {
                                                 <div
                                                     key={
                                                         mcq.id ||
-                                                        index
+                                                        mcq.mcq_id ||
+                                                        `${index}-${mcq.question}`
                                                     }
                                                     style={{
                                                         border:
@@ -2717,6 +3619,8 @@ export default function News() {
                                                             12,
                                                         padding:
                                                             16,
+                                                        background:
+                                                            "#ffffff",
                                                     }}
                                                 >
                                                     <div
@@ -2725,6 +3629,8 @@ export default function News() {
                                                                 800,
                                                             marginBottom:
                                                                 10,
+                                                            lineHeight:
+                                                                1.6,
                                                         }}
                                                     >
                                                         Q
@@ -2743,52 +3649,101 @@ export default function News() {
                                                             (
                                                                 option,
                                                                 optionIndex
-                                                            ) => (
-                                                                <div
-                                                                    key={
-                                                                        optionIndex
-                                                                    }
-                                                                    style={{
-                                                                        padding:
-                                                                            "8px 10px",
-                                                                        background:
-                                                                            "#f8fafc",
-                                                                        borderRadius:
-                                                                            7,
-                                                                        marginBottom:
-                                                                            6,
-                                                                    }}
-                                                                >
-                                                                    {
-                                                                        String.fromCharCode(
-                                                                            65 +
-                                                                                optionIndex
-                                                                        )
-                                                                    }
-                                                                    .{" "}
-                                                                    {
-                                                                        option
-                                                                    }
-                                                                </div>
-                                                            )
+                                                            ) => {
+                                                                const letter =
+                                                                    String.fromCharCode(
+                                                                        65 +
+                                                                            optionIndex
+                                                                    );
+
+                                                                return (
+                                                                    <div
+                                                                        key={
+                                                                            `${index}-${optionIndex}`
+                                                                        }
+                                                                        style={{
+                                                                            padding:
+                                                                                "10px 12px",
+                                                                            background:
+                                                                                "#f8fafc",
+                                                                            border:
+                                                                                "1px solid #e2e8f0",
+                                                                            borderRadius:
+                                                                                8,
+                                                                            marginBottom:
+                                                                                7,
+                                                                            lineHeight:
+                                                                                1.5,
+                                                                        }}
+                                                                    >
+                                                                        <strong>
+                                                                            {
+                                                                                letter
+                                                                            }
+                                                                            .
+                                                                        </strong>{" "}
+                                                                        {
+                                                                            option
+                                                                        }
+                                                                    </div>
+                                                                );
+                                                            }
                                                         )}
 
                                                     {mcq.explanation && (
                                                         <div
                                                             style={{
                                                                 marginTop:
-                                                                    10,
+                                                                    12,
                                                                 fontSize:
                                                                     13,
                                                                 color:
                                                                     "#475569",
+                                                                lineHeight:
+                                                                    1.6,
+                                                                background:
+                                                                    "#f8fafc",
+                                                                padding:
+                                                                    10,
+                                                                borderRadius:
+                                                                    8,
                                                             }}
                                                         >
                                                             <strong>
-                                                                Explanation:
+                                                                {
+                                                                    t.explanation
+                                                                }
                                                             </strong>{" "}
                                                             {
                                                                 mcq.explanation
+                                                            }
+                                                        </div>
+                                                    )}
+
+                                                    {mcq.correct_answer && (
+                                                        <div
+                                                            style={{
+                                                                marginTop:
+                                                                    10,
+                                                                fontSize:
+                                                                    13,
+                                                                fontWeight:
+                                                                    700,
+                                                                color:
+                                                                    "#166534",
+                                                                background:
+                                                                    "#dcfce7",
+                                                                padding:
+                                                                    "8px 10px",
+                                                                borderRadius:
+                                                                    8,
+                                                            }}
+                                                        >
+                                                            {
+                                                                t.answer
+                                                            }{" "}
+                                                            {
+                                                                mcq.correct_answer
                                                             }
                                                         </div>
                                                     )}
@@ -2803,15 +3758,12 @@ export default function News() {
                 </div>
             )}
 
-            {/* ======================================================
-                PAYMENT OVERLAY
-            ====================================================== */}
+            {/* PAYMENT STATUS */}
 
             {paymentLoading && (
                 <div
                     style={{
-                        position:
-                            "fixed",
+                        position: "fixed",
                         inset: 0,
                         zIndex: 90,
                         pointerEvents:
@@ -2836,10 +3788,11 @@ export default function News() {
                                 "12px 18px",
                             boxShadow:
                                 "0 10px 30px rgba(0,0,0,.25)",
-                            fontSize:
-                                14,
+                            fontSize: 14,
                             fontWeight:
                                 700,
+                            whiteSpace:
+                                "nowrap",
                         }}
                     >
                         💳 ₹1 News Access
@@ -2850,4 +3803,3 @@ export default function News() {
         </div>
     );
 }
-

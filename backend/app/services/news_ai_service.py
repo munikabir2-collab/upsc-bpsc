@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -27,36 +26,133 @@ GROQ_MODEL = os.getenv(
     "qwen/qwen3.6-27b",
 )
 
-GROQ_TEMPERATURE = float(
-    os.getenv("GROQ_TEMPERATURE", "0.1")
-)
+try:
+    GROQ_TEMPERATURE = float(
+        os.getenv("GROQ_TEMPERATURE", "0.1")
+    )
+except (TypeError, ValueError):
+    GROQ_TEMPERATURE = 0.1
 
-MAX_COMPLETION_TOKENS = int(
-    os.getenv("MAX_COMPLETION_TOKENS", "3000")
-)
 
-MCQ_MAX_COMPLETION_TOKENS = int(
-    os.getenv("MCQ_MAX_COMPLETION_TOKENS", "2200")
-)
+try:
+    MAX_COMPLETION_TOKENS = int(
+        os.getenv(
+            "MAX_COMPLETION_TOKENS",
+            "3000",
+        )
+    )
+except (TypeError, ValueError):
+    MAX_COMPLETION_TOKENS = 3000
 
-MCQ_MAX_ATTEMPTS = int(
-    os.getenv("MCQ_MAX_ATTEMPTS", "3")
-)
 
-MCQ_MAX_ARTICLE_CHARS = int(
-    os.getenv("MCQ_MAX_ARTICLE_CHARS", "6500")
-)
+try:
+    MCQ_MAX_COMPLETION_TOKENS = int(
+        os.getenv(
+            "MCQ_MAX_COMPLETION_TOKENS",
+            "2200",
+        )
+    )
+except (TypeError, ValueError):
+    MCQ_MAX_COMPLETION_TOKENS = 2200
 
-MCQ_RETRY_DELAY_SECONDS = float(
-    os.getenv("MCQ_RETRY_DELAY_SECONDS", "1.5")
-)
 
-MCQ_RATE_LIMIT_WAIT_SECONDS = float(
-    os.getenv("MCQ_RATE_LIMIT_WAIT_SECONDS", "35")
-)
+try:
+    MCQ_MAX_ATTEMPTS = int(
+        os.getenv(
+            "MCQ_MAX_ATTEMPTS",
+            "3",
+        )
+    )
+except (TypeError, ValueError):
+    MCQ_MAX_ATTEMPTS = 3
 
-MCQ_RESPONSE_LOG_CHARS = int(
-    os.getenv("MCQ_RESPONSE_LOG_CHARS", "1200")
+
+try:
+    MCQ_MAX_ARTICLE_CHARS = int(
+        os.getenv(
+            "MCQ_MAX_ARTICLE_CHARS",
+            "6500",
+        )
+    )
+except (TypeError, ValueError):
+    MCQ_MAX_ARTICLE_CHARS = 6500
+
+
+try:
+    MCQ_RETRY_DELAY_SECONDS = float(
+        os.getenv(
+            "MCQ_RETRY_DELAY_SECONDS",
+            "1.5",
+        )
+    )
+except (TypeError, ValueError):
+    MCQ_RETRY_DELAY_SECONDS = 1.5
+
+
+try:
+    MCQ_RATE_LIMIT_WAIT_SECONDS = float(
+        os.getenv(
+            "MCQ_RATE_LIMIT_WAIT_SECONDS",
+            "35",
+        )
+    )
+except (TypeError, ValueError):
+    MCQ_RATE_LIMIT_WAIT_SECONDS = 35.0
+
+
+try:
+    MCQ_RESPONSE_LOG_CHARS = int(
+        os.getenv(
+            "MCQ_RESPONSE_LOG_CHARS",
+            "1200",
+        )
+    )
+except (TypeError, ValueError):
+    MCQ_RESPONSE_LOG_CHARS = 1200
+
+
+try:
+    MCQ_MAX_RATE_LIMIT_WAIT_SECONDS = float(
+        os.getenv(
+            "MCQ_MAX_RATE_LIMIT_WAIT_SECONDS",
+            "90",
+        )
+    )
+except (TypeError, ValueError):
+    MCQ_MAX_RATE_LIMIT_WAIT_SECONDS = 90.0
+
+
+# ============================================================
+# SUPPORTED VALUES
+# ============================================================
+
+SUPPORTED_EXAMS = {
+    "UPSC",
+    "BPSC",
+}
+
+SUPPORTED_LANGUAGES = {
+    "en",
+    "hi",
+}
+
+SUPPORTED_DIFFICULTIES = {
+    "Easy",
+    "Medium",
+    "Hard",
+}
+
+SUPPORTED_QUESTION_TYPES = {
+    "single_correct",
+    "statement",
+    "assertion_reason",
+}
+
+OPTION_KEYS = (
+    "A",
+    "B",
+    "C",
+    "D",
 )
 
 
@@ -74,6 +170,10 @@ _client: Any = None
 
 
 def _get_client() -> Any:
+    """
+    Lazily initialize Groq client.
+    """
+
     global _client
 
     if _client is not None:
@@ -117,6 +217,7 @@ def _clean_text(
     value: Any,
     default: str = "",
 ) -> str:
+
     if value is None:
         return default
 
@@ -147,7 +248,7 @@ def _normalize_language(
         value,
     )
 
-    if value not in {"en", "hi"}:
+    if value not in SUPPORTED_LANGUAGES:
         return "en"
 
     return value
@@ -162,10 +263,7 @@ def _normalize_exam(
         "UPSC",
     ).upper()
 
-    if value not in {
-        "UPSC",
-        "BPSC",
-    }:
+    if value not in SUPPORTED_EXAMS:
         return "UPSC"
 
     return value
@@ -180,11 +278,7 @@ def _normalize_difficulty(
         "Medium",
     ).capitalize()
 
-    if value not in {
-        "Easy",
-        "Medium",
-        "Hard",
-    }:
+    if value not in SUPPORTED_DIFFICULTIES:
         return "Medium"
 
     return value
@@ -202,15 +296,44 @@ def _normalize_question_type(
     aliases = {
         "mcq": "single_correct",
         "multiple_choice": "single_correct",
+        "single": "single_correct",
         "single_correct": "single_correct",
         "statement": "statement",
         "assertion_reason": "assertion_reason",
+        "assertion-reason": "assertion_reason",
     }
 
     return aliases.get(
         value,
         "single_correct",
     )
+
+
+def _safe_int(
+    value: Any,
+    default: int,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> int:
+
+    try:
+        value = int(value)
+    except Exception:
+        value = default
+
+    if minimum is not None:
+        value = max(
+            minimum,
+            value,
+        )
+
+    if maximum is not None:
+        value = min(
+            maximum,
+            value,
+        )
+
+    return value
 
 
 # ============================================================
@@ -248,6 +371,9 @@ def _truncate_text(
 
     value = _clean_text(value)
 
+    if max_chars <= 0:
+        return ""
+
     if len(value) <= max_chars:
         return value
 
@@ -272,6 +398,7 @@ def _build_article_context(
         "description",
         "summary",
         "content",
+        "body",
     )
 
     category = _article_value(
@@ -299,6 +426,7 @@ def _build_article_context(
         article,
         "published_at",
         "published_date",
+        "published",
     )
 
     parts: list[str] = []
@@ -351,7 +479,7 @@ def _build_article_context(
 
 
 # ============================================================
-# JSON UTILITIES
+# THINKING / MARKDOWN CLEANING
 # ============================================================
 
 def _remove_thinking_blocks(
@@ -361,8 +489,39 @@ def _remove_thinking_blocks(
     if not text:
         return ""
 
-    text = re.sub(
+    text = str(text)
+
+    patterns = (
         r"<think>.*?</think>",
+        r"<thinking>.*?</thinking>",
+        r"<analysis>.*?</analysis>",
+    )
+
+    for pattern in patterns:
+
+        text = re.sub(
+            pattern,
+            "",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+    text = re.sub(
+        r"<think>.*$",
+        "",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    text = re.sub(
+        r"<thinking>.*$",
+        "",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    text = re.sub(
+        r"<analysis>.*$",
         "",
         text,
         flags=re.IGNORECASE | re.DOTALL,
@@ -388,10 +547,15 @@ def _remove_markdown_fences(
         r"\s*```\s*$",
         "",
         text,
+        flags=re.IGNORECASE,
     )
 
     return text.strip()
 
+
+# ============================================================
+# JSON EXTRACTION
+# ============================================================
 
 def _extract_balanced_json(
     text: str,
@@ -403,18 +567,10 @@ def _extract_balanced_json(
     text = _remove_thinking_blocks(text)
     text = _remove_markdown_fences(text)
 
-    # --------------------------------------------------------
-    # Direct JSON
-    # --------------------------------------------------------
-
     try:
         return json.loads(text)
     except Exception:
         pass
-
-    # --------------------------------------------------------
-    # Balanced JSON object / array
-    # --------------------------------------------------------
 
     for start_index, char in enumerate(text):
 
@@ -487,7 +643,7 @@ _extract_json = _extract_balanced_json
 
 
 # ============================================================
-# RESPONSE EXTRACTION
+# GROQ RESPONSE EXTRACTION
 # ============================================================
 
 def _get_response_content(
@@ -503,6 +659,9 @@ def _get_response_content(
         )
 
         if not choices:
+            logger.warning(
+                "Groq response contains no choices."
+            )
             return ""
 
         message = choices[0].message
@@ -514,8 +673,9 @@ def _get_response_content(
         )
 
         if content:
-            return _clean_text(
-                content
+
+            return _remove_thinking_blocks(
+                _clean_text(content)
             )
 
         parsed = getattr(
@@ -530,12 +690,16 @@ def _get_response_content(
                 parsed,
                 str,
             ):
-                return parsed
+                return _remove_thinking_blocks(
+                    parsed
+                )
 
             try:
-                return json.dumps(
-                    parsed,
-                    ensure_ascii=False,
+                return _remove_thinking_blocks(
+                    json.dumps(
+                        parsed,
+                        ensure_ascii=False,
+                    )
                 )
             except Exception:
                 return ""
@@ -554,11 +718,10 @@ def _get_response_content(
 
 def _normalize_answer(
     value: Any,
-) -> str:
+) -> str | None:
 
     value = _clean_text(
-        value,
-        "A",
+        value
     ).upper()
 
     value = value.replace(
@@ -571,14 +734,11 @@ def _normalize_answer(
         "",
     )
 
-    value = value.strip()
+    value = value.strip(
+        " .:-)"
+    )
 
-    if value in {
-        "A",
-        "B",
-        "C",
-        "D",
-    }:
+    if value in OPTION_KEYS:
         return value
 
     match = re.search(
@@ -589,7 +749,7 @@ def _normalize_answer(
     if match:
         return match.group(1)
 
-    return "A"
+    return None
 
 
 def _normalize_options(
@@ -633,13 +793,14 @@ def _normalize_options(
                     option.get("value")
                 )
 
-            if key in {
-                "A",
-                "B",
-                "C",
-                "D",
-            } and text:
+            key = key.strip(
+                " .:)"
+            )
 
+            if (
+                key in OPTION_KEYS
+                and text
+            ):
                 option_map[key] = text
 
     aliases = {
@@ -688,13 +849,57 @@ def _normalize_options(
                 "",
             ),
         }
-        for key in (
-            "A",
-            "B",
-            "C",
-            "D",
-        )
+        for key in OPTION_KEYS
     ]
+
+
+# ============================================================
+# BAD / META QUESTION DETECTION
+# ============================================================
+
+META_QUESTION_PATTERNS = [
+    r"\bwhat is the exam\b",
+    r"\bwhich exam\b",
+    r"\bexamination context\b",
+    r"\bmcq generation\b",
+    r"\bquestion generation\b",
+    r"\bwhat should be used\b",
+    r"\bwhat category\b",
+    r"\bwhich category\b",
+    r"\barticle category\b",
+    r"\bprovided article\b",
+    r"\bsupplied article\b",
+    r"\bwhat is the language\b",
+    r"\bwhich language\b",
+    r"\bwhat type of question\b",
+    r"\bquestion type\b",
+    r"\bthis mcq\b",
+    r"\bthis article\b",
+    r"\bnews article\b",
+]
+
+
+def _is_meta_question(
+    question: str,
+) -> bool:
+
+    text = _clean_text(
+        question
+    ).casefold()
+
+    if not text:
+        return True
+
+    for pattern in META_QUESTION_PATTERNS:
+
+        if re.search(
+            pattern,
+            text,
+            flags=re.IGNORECASE,
+        ):
+            return True
+
+    return False
 
 
 # ============================================================
@@ -723,9 +928,23 @@ def _normalize_mcq(
     if not question:
         return None
 
+    if len(question) < 15:
+        return None
+
+    # Reject meta questions.
+    if _is_meta_question(question):
+        logger.warning(
+            "Rejected meta MCQ: %s",
+            question,
+        )
+        return None
+
     options = _normalize_options(
         item
     )
+
+    if len(options) != 4:
+        return None
 
     option_texts = [
         _clean_text(
@@ -733,9 +952,6 @@ def _normalize_mcq(
         )
         for option in options
     ]
-
-    if len(options) != 4:
-        return None
 
     if any(
         not value
@@ -755,35 +971,42 @@ def _normalize_mcq(
     if len(
         set(normalized_options)
     ) != 4:
+
+        logger.warning(
+            "MCQ rejected because options are duplicated."
+        )
+
         return None
 
     correct_answer = _normalize_answer(
         item.get(
             "correct_answer",
-            item.get(
-                "answer",
-                "A",
-            ),
+            item.get("answer"),
         )
     )
 
-    explanation = _clean_text(
-        item.get(
-            "explanation"
+    if correct_answer not in OPTION_KEYS:
+
+        logger.warning(
+            "Invalid correct_answer from AI: %s",
+            item.get("correct_answer"),
         )
+
+        return None
+
+    explanation = _clean_text(
+        item.get("explanation")
     )
 
     if not explanation:
-        explanation = (
-            "The answer is supported by "
-            "the information given in the article."
-        )
+        return None
 
     category = _clean_text(
         item.get("category")
     )
 
     if not category:
+
         category = _article_value(
             article,
             "category",
@@ -801,6 +1024,7 @@ def _normalize_mcq(
     )
 
     if not state:
+
         state = _article_value(
             article,
             "state",
@@ -825,6 +1049,29 @@ def _normalize_mcq(
 # QUESTION DEDUPLICATION
 # ============================================================
 
+def _question_key(
+    question: str,
+) -> str:
+
+    value = _clean_text(
+        question
+    ).casefold()
+
+    value = re.sub(
+        r"\s+",
+        " ",
+        value,
+    )
+
+    value = re.sub(
+        r"[^\w\s\u0900-\u097F]",
+        "",
+        value,
+    )
+
+    return value.strip()
+
+
 def _deduplicate_questions(
     questions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -837,16 +1084,21 @@ def _deduplicate_questions(
 
     for question in questions:
 
-        key = re.sub(
-            r"\s+",
-            " ",
-            question["question"].casefold(),
+        key = _question_key(
+            question.get(
+                "question",
+                "",
+            )
         )
+
+        if not key:
+            continue
 
         if key in seen:
             continue
 
         seen.add(key)
+
         result.append(
             question
         )
@@ -865,6 +1117,7 @@ def _build_mcq_prompt(
     count: int,
     difficulty: str,
     question_type: str,
+    existing_questions: list[str] | None = None,
     retry: bool = False,
 ) -> str:
 
@@ -872,90 +1125,273 @@ def _build_mcq_prompt(
         article
     )
 
+    # --------------------------------------------------------
+    # Language
+    # --------------------------------------------------------
+
     if language == "hi":
 
-        language_instruction = (
-            "Write questions, options and "
-            "explanations in natural Hindi. "
-            "Keep proper nouns and technical "
-            "terms in commonly used English."
-        )
+        language_instruction = """
+Write the question, all options and explanation in
+natural competitive-examination Hindi.
+
+Use English only for unavoidable proper nouns,
+technical names, institutions, abbreviations,
+scientific terms and official names.
+
+Do NOT copy the entire English article title as an option.
+""".strip()
 
     else:
 
-        language_instruction = (
-            "Write all questions, options and "
-            "explanations in formal English."
-        )
+        language_instruction = """
+Write the question, all options and explanation
+in formal competitive-examination English.
+""".strip()
+
+    # --------------------------------------------------------
+    # Exam
+    # --------------------------------------------------------
 
     if exam == "BPSC":
 
-        exam_instruction = (
-            "Target BPSC examination. "
-            "Use Bihar relevance only when "
-            "it is explicitly present in ARTICLE."
-        )
+        exam_instruction = """
+Target BPSC examination.
+
+Use Bihar-specific relevance ONLY if Bihar-related
+facts are explicitly present in the ARTICLE.
+""".strip()
 
     else:
 
-        exam_instruction = (
-            "Target UPSC examination."
-        )
+        exam_instruction = """
+Target UPSC Civil Services examination.
+
+Focus on factual, conceptual and analytical
+current-affairs questions.
+""".strip()
+
+    # --------------------------------------------------------
+    # Question type
+    # --------------------------------------------------------
+
+    if question_type == "statement":
+
+        question_type_instruction = """
+Use statement-based MCQs.
+
+Each question should contain 2-4 numbered statements.
+Options must represent combinations of those statements.
+There must be exactly one correct combination.
+""".strip()
+
+    elif question_type == "assertion_reason":
+
+        question_type_instruction = """
+Use Assertion-Reason format.
+
+Both Assertion and Reason must be based ONLY
+on information explicitly present in the ARTICLE.
+
+Do not use outside knowledge.
+""".strip()
+
+    else:
+
+        question_type_instruction = """
+Use standard single-correct-answer MCQs.
+""".strip()
+
+    # --------------------------------------------------------
+    # Duplicate avoidance
+    # --------------------------------------------------------
+
+    duplicate_instruction = ""
+
+    if existing_questions:
+
+        clean_existing = [
+            _clean_text(q)
+            for q in existing_questions
+            if _clean_text(q)
+        ]
+
+        if clean_existing:
+
+            duplicate_lines = "\n".join(
+                f"- {question}"
+                for question in clean_existing[:20]
+            )
+
+            duplicate_instruction = f"""
+DO NOT repeat or rephrase these already generated questions:
+
+{duplicate_lines}
+""".strip()
+
+    # --------------------------------------------------------
+    # Retry
+    # --------------------------------------------------------
 
     retry_instruction = ""
 
     if retry:
 
-        retry_instruction = (
-            "IMPORTANT: Previous response failed "
-            "local validation. Return ONLY one "
-            "valid JSON object. Do not use Markdown. "
-            "Do not use code fences. Do not explain."
-        )
+        retry_instruction = """
+IMPORTANT RETRY:
+
+The previous response failed local validation
+or did not contain enough valid MCQs.
+
+Return ONLY valid JSON.
+
+Do not use Markdown.
+Do not use code fences.
+Do not add commentary.
+Do not generate meta questions.
+""".strip()
+
+    # --------------------------------------------------------
+    # Critical anti-meta instructions
+    # --------------------------------------------------------
+
+    anti_meta_instruction = """
+CRITICAL QUESTION QUALITY RULES:
+
+NEVER ask:
+
+- What is the exam?
+- Which exam is this for?
+- What is the category?
+- Which category does the article belong to?
+- What is the language?
+- What is the question type?
+- What is the MCQ generation context?
+- What should be used to generate an MCQ?
+- What is the source of this article?
+- What is the article about in a generic way?
+- Whether the article contains information.
+
+NEVER make UPSC, BPSC, category, language,
+question_type or generation request itself
+the subject of a question.
+
+The question MUST test an actual factual,
+conceptual or analytical point contained in ARTICLE.
+
+For example, if ARTICLE says:
+
+"NASA considered 86,000 satellite designs,
+selected a satellite built for about $1,500,
+the satellite weighed 64 grams,
+and it demonstrated 3D-printed satellite technology."
+
+Good questions include:
+
+- Approximately how many satellite designs were considered?
+- What was notable about the satellite's weight?
+- What was the approximate development cost mentioned?
+- What technology was the satellite intended to demonstrate?
+
+Bad questions include:
+
+- Which exam is this MCQ for?
+- What is the article category?
+- What should be used to generate this MCQ?
+- What is the source of the article?
+
+Every question must be answerable from ARTICLE alone.
+""".strip()
+
+    # --------------------------------------------------------
+    # Final prompt
+    # --------------------------------------------------------
 
     return f"""
 You are an expert UPSC and BPSC current-affairs MCQ creator.
 
-Generate exactly {count} competitive-examination MCQs.
+Generate exactly {count} high-quality competitive-examination MCQs.
 
-EXAM: {exam}
-LANGUAGE: {language}
-DIFFICULTY: {difficulty}
-QUESTION TYPE: {question_type}
+EXAM:
+{exam}
+
+LANGUAGE:
+{language}
+
+DIFFICULTY:
+{difficulty}
+
+QUESTION TYPE:
+{question_type}
 
 {language_instruction}
 
 {exam_instruction}
 
-STRICT RULES:
+{question_type_instruction}
+
+{anti_meta_instruction}
+
+STRICT FACTUAL RULES:
 
 1. Use ONLY information explicitly present in ARTICLE.
 2. Never invent facts.
-3. Generate exactly {count} questions.
-4. Each question must contain exactly four options.
-5. Option keys must be A, B, C and D.
-6. There must be exactly one correct answer.
-7. correct_answer must be exactly A, B, C or D.
-8. Explanations must be supported by ARTICLE.
-9. Questions must be meaningfully different.
-10. Avoid generic questions about the fact that an article exists.
-11. Prefer factual, conceptual, analytical and examination-oriented questions.
-12. Do NOT add Markdown.
-13. Do NOT add ```json.
-14. Do NOT add commentary before or after the JSON.
-15. Return exactly ONE JSON object.
+3. Never use outside knowledge.
+4. Every correct answer must be directly supported by ARTICLE.
+5. Every explanation must be directly supported by ARTICLE.
+6. Generate exactly {count} questions.
+7. Every question must have exactly four options.
+8. Option keys must be exactly A, B, C and D.
+9. There must be exactly one correct answer.
+10. correct_answer must be exactly A, B, C or D.
+11. All four options must be different.
+12. Questions must be meaningfully different.
+13. Do not repeat the same fact unnecessarily.
+14. Avoid generic questions.
+15. Avoid article-existence questions.
+16. Avoid category-only questions.
+17. Avoid exam-only questions.
+18. Avoid source-only questions.
+19. Avoid language-only questions.
+20. Avoid generation-context questions.
+21. Prefer concrete facts, numbers, names, technologies,
+    institutions, events, causes, objectives and implications
+    explicitly mentioned in ARTICLE.
+22. For numerical facts, create plausible distractors
+    using different numbers but do not introduce unrelated facts.
+23. For conceptual questions, keep the concept directly
+    grounded in ARTICLE.
+24. Do not invent Bihar relevance for BPSC.
+25. Do not include Markdown.
+26. Do not include ```json.
+27. Do not include commentary before or after JSON.
+28. Return exactly ONE JSON object.
 
-The response must have this structure:
+{duplicate_instruction}
+
+REQUIRED JSON STRUCTURE:
 
 {{
   "questions": [
     {{
-      "question": "Question text",
+      "question": "Actual factual question based on ARTICLE",
       "options": [
-        {{"key": "A", "text": "Option A"}},
-        {{"key": "B", "text": "Option B"}},
-        {{"key": "C", "text": "Option C"}},
-        {{"key": "D", "text": "Option D"}}
+        {{
+          "key": "A",
+          "text": "Option A"
+        }},
+        {{
+          "key": "B",
+          "text": "Option B"
+        }},
+        {{
+          "key": "C",
+          "text": "Option C"
+        }},
+        {{
+          "key": "D",
+          "text": "Option D"
+        }}
       ],
       "correct_answer": "A",
       "explanation": "Explanation based only on ARTICLE",
@@ -969,6 +1405,7 @@ The response must have this structure:
 {retry_instruction}
 
 ARTICLE:
+
 {article_context}
 """.strip()
 
@@ -989,6 +1426,7 @@ def _is_rate_limit_error(
         or "rate_limit_exceeded" in text
         or "tokens per minute" in text
         or "tpm" in text
+        or "too many requests" in text
     )
 
 
@@ -998,13 +1436,23 @@ def _extract_retry_seconds(
 
     text = str(exc)
 
-    matches = re.findall(
-        r"(\d+(?:\.\d+)?)\s*s",
-        text,
-        flags=re.IGNORECASE,
-    )
+    patterns = [
+        r"retry\s+after\s+(\d+(?:\.\d+)?)\s*s",
+        r"retry\s+in\s+(\d+(?:\.\d+)?)\s*s",
+        r"(\d+(?:\.\d+)?)\s*seconds?",
+        r"(\d+(?:\.\d+)?)\s*s\b",
+    ]
 
-    if matches:
+    for pattern in patterns:
+
+        matches = re.findall(
+            pattern,
+            text,
+            flags=re.IGNORECASE,
+        )
+
+        if not matches:
+            continue
 
         try:
 
@@ -1014,13 +1462,22 @@ def _extract_retry_seconds(
 
             return max(
                 1.0,
-                min(value, 90.0),
+                min(
+                    value,
+                    MCQ_MAX_RATE_LIMIT_WAIT_SECONDS,
+                ),
             )
 
         except Exception:
-            pass
+            continue
 
-    return MCQ_RATE_LIMIT_WAIT_SECONDS
+    return max(
+        1.0,
+        min(
+            MCQ_RATE_LIMIT_WAIT_SECONDS,
+            MCQ_MAX_RATE_LIMIT_WAIT_SECONDS,
+        ),
+    )
 
 
 # ============================================================
@@ -1032,30 +1489,22 @@ def _call_groq_mcq(
     prompt: str,
 ) -> str:
 
-    """
-    IMPORTANT:
-
-    Do NOT use response_format=json_object here.
-
-    Qwen + Groq can return:
-        json_validate_failed
-
-    before the application receives any response.
-
-    We therefore request normal text and perform
-    JSON extraction/validation locally.
-    """
-
     kwargs: dict[str, Any] = {
         "model": GROQ_MODEL,
-
         "messages": [
             {
                 "role": "system",
                 "content": (
                     "You are a strict JSON-only "
                     "competitive examination MCQ generator. "
-                    "Return one JSON object and nothing else."
+                    "Return exactly one JSON object. "
+                    "Every question must be based on "
+                    "actual facts in the ARTICLE. "
+                    "Never create meta questions about "
+                    "exam, category, language or generation. "
+                    "Do not return Markdown. "
+                    "Do not return reasoning. "
+                    "Do not return commentary."
                 ),
             },
             {
@@ -1063,28 +1512,12 @@ def _call_groq_mcq(
                 "content": prompt,
             },
         ],
-
         "temperature": GROQ_TEMPERATURE,
-
         "max_completion_tokens": (
             MCQ_MAX_COMPLETION_TOKENS
         ),
-
         "stream": False,
     }
-
-    # --------------------------------------------------------
-    # First try with hidden reasoning.
-    # If model/SDK rejects it, retry without it.
-    # --------------------------------------------------------
-
-    kwargs_with_reasoning = dict(
-        kwargs
-    )
-
-    kwargs_with_reasoning[
-        "reasoning_format"
-    ] = "hidden"
 
     try:
 
@@ -1093,46 +1526,240 @@ def _call_groq_mcq(
             .chat
             .completions
             .create(
-                **kwargs_with_reasoning
+                **kwargs
             )
         )
 
-    except Exception as exc:
+    except Exception:
 
-        error_text = str(
-            exc
-        ).lower()
+        logger.exception(
+            "Groq MCQ request failed."
+        )
 
-        if (
-            "reasoning_format" in error_text
-            or "reasoning format" in error_text
-            or "unsupported" in error_text
-        ):
+        raise
 
-            logger.warning(
-                "Groq model rejected reasoning_format; "
-                "retrying without reasoning_format."
-            )
-
-            response = (
-                client
-                .chat
-                .completions
-                .create(
-                    **kwargs
-                )
-            )
-
-        else:
-            raise
-
-    return _get_response_content(
+    content = _get_response_content(
         response
     )
 
+    logger.debug(
+        "Groq cleaned MCQ response | "
+        "chars=%s | preview=%s",
+        len(content),
+        content[
+            :MCQ_RESPONSE_LOG_CHARS
+        ],
+    )
+
+    return content
+
 
 # ============================================================
-# DETERMINISTIC FALLBACK
+# SENTENCE EXTRACTION
+# ============================================================
+
+def _extract_sentences(
+    text: str,
+    limit: int = 20,
+) -> list[str]:
+
+    text = _clean_text(text)
+
+    if not text:
+        return []
+
+    parts = re.split(
+        r"(?<=[.!?।])\s+",
+        text,
+    )
+
+    result: list[str] = []
+
+    for part in parts:
+
+        part = _clean_text(part)
+
+        if len(part) < 25:
+            continue
+
+        result.append(part)
+
+        if len(result) >= limit:
+            break
+
+    return result
+
+
+# ============================================================
+# FACT EXTRACTION FOR FALLBACK
+# ============================================================
+
+def _extract_numeric_facts(
+    text: str,
+) -> list[tuple[str, str]]:
+
+    facts: list[
+        tuple[str, str]
+    ] = []
+
+    text = _clean_text(text)
+
+    if not text:
+        return facts
+
+    patterns = [
+        r"\b\d[\d,]*(?:\.\d+)?\s*(?:grams?|kg|kilograms?|km|million|billion|crore|lakh|years?|days?|percent|%)\b",
+        r"\$\s?\d[\d,]*(?:\.\d+)?",
+        r"\b\d[\d,]*\b",
+    ]
+
+    seen: set[str] = set()
+
+    for pattern in patterns:
+
+        for match in re.finditer(
+            pattern,
+            text,
+            flags=re.IGNORECASE,
+        ):
+
+            value = match.group(0).strip()
+
+            key = value.casefold()
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+
+            start = max(
+                0,
+                match.start() - 90,
+            )
+
+            end = min(
+                len(text),
+                match.end() + 120,
+            )
+
+            context = _clean_text(
+                text[start:end]
+            )
+
+            if context:
+                facts.append(
+                    (
+                        value,
+                        context,
+                    )
+                )
+
+    return facts[:12]
+
+
+# ============================================================
+# FALLBACK OPTION BUILDER
+# ============================================================
+
+def _fallback_option_set(
+    correct: str,
+    alternatives: list[str],
+) -> list[dict[str, str]]:
+
+    values = [
+        correct,
+        *alternatives,
+    ]
+
+    values = [
+        _clean_text(value)
+        for value in values
+        if _clean_text(value)
+    ]
+
+    unique: list[str] = []
+
+    seen: set[str] = set()
+
+    for value in values:
+
+        key = value.casefold()
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+
+        unique.append(value)
+
+    while len(unique) < 4:
+
+        unique.append(
+            f"Not stated in the article ({len(unique) + 1})"
+        )
+
+    unique = unique[:4]
+
+    # Shuffle correct answer position.
+    correct_value = unique[0]
+
+    other_values = unique[1:]
+
+    random.shuffle(other_values)
+
+    shuffled = [
+        correct_value,
+        *other_values,
+    ]
+
+    random.shuffle(shuffled)
+
+    result: list[
+        dict[str, str]
+    ] = []
+
+    for key, text in zip(
+        OPTION_KEYS,
+        shuffled,
+    ):
+
+        result.append(
+            {
+                "key": key,
+                "text": text,
+            }
+        )
+
+    return result
+
+
+def _find_correct_option_key(
+    options: list[dict[str, str]],
+    correct_text: str,
+) -> str:
+
+    correct_key = "A"
+
+    target = _clean_text(
+        correct_text
+    ).casefold()
+
+    for option in options:
+
+        if (
+            _clean_text(
+                option.get("text")
+            ).casefold()
+            == target
+        ):
+            correct_key = option["key"]
+            break
+
+    return correct_key
+
+
+# ============================================================
+# INTELLIGENT DETERMINISTIC FALLBACK
 # ============================================================
 
 def _fallback_mcqs(
@@ -1155,6 +1782,7 @@ def _fallback_mcqs(
         "description",
         "summary",
         "content",
+        "body",
     )
 
     category = (
@@ -1165,357 +1793,215 @@ def _fallback_mcqs(
         or "General"
     )
 
+    topic = _article_value(
+        article,
+        "topic",
+    )
+
     state = _article_value(
         article,
         "state",
     )
 
-    if not title:
-        title = (
-            "इस समाचार"
-            if language == "hi"
-            else "this news article"
-        )
-
     if not description:
         description = title
 
-    if language == "hi":
+    if not description:
+        return []
 
-        questions = [
+    sentences = _extract_sentences(
+        description,
+        limit=20,
+    )
 
-            {
-                "question": (
-                    "इस समाचार का मुख्य विषय "
-                    "निम्नलिखित में से क्या है?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": title,
-                    },
-                    {
-                        "key": "B",
-                        "text": "मौसम संबंधी जानकारी",
-                    },
-                    {
-                        "key": "C",
-                        "text": "खेल संबंधी जानकारी",
-                    },
-                    {
-                        "key": "D",
-                        "text": "मनोरंजन संबंधी जानकारी",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    "समाचार का शीर्षक "
-                    "मुख्य विषय को दर्शाता है।"
-                ),
-            },
-
-            {
-                "question": (
-                    "दिए गए समाचार के आधार पर "
-                    "किस प्रकार की जानकारी उपलब्ध है?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": "समाचार की सामग्री",
-                    },
-                    {
-                        "key": "B",
-                        "text": "केवल मौसम की जानकारी",
-                    },
-                    {
-                        "key": "C",
-                        "text": "केवल खेल की जानकारी",
-                    },
-                    {
-                        "key": "D",
-                        "text": "कोई जानकारी उपलब्ध नहीं",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    "दिए गए article में "
-                    "समाचार की सामग्री उपलब्ध है।"
-                ),
-            },
-
-            {
-                "question": (
-                    "इस MCQ का परीक्षा संदर्भ "
-                    "क्या है?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": exam,
-                    },
-                    {
-                        "key": "B",
-                        "text": "SSC",
-                    },
-                    {
-                        "key": "C",
-                        "text": "Banking",
-                    },
-                    {
-                        "key": "D",
-                        "text": "Railway",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    f"इस MCQ generation request "
-                    f"का examination context {exam} है।"
-                ),
-            },
-
-            {
-                "question": (
-                    "समाचार की श्रेणी क्या है?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": category,
-                    },
-                    {
-                        "key": "B",
-                        "text": "मनोरंजन",
-                    },
-                    {
-                        "key": "C",
-                        "text": "खेल",
-                    },
-                    {
-                        "key": "D",
-                        "text": "मौसम",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    f"Article की category "
-                    f"{category} है।"
-                ),
-            },
-
-            {
-                "question": (
-                    "इस समाचार से MCQ बनाते समय "
-                    "किस जानकारी का उपयोग किया जाना चाहिए?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": (
-                            "केवल article में उपलब्ध जानकारी"
-                        ),
-                    },
-                    {
-                        "key": "B",
-                        "text": "काल्पनिक तथ्य",
-                    },
-                    {
-                        "key": "C",
-                        "text": "असंबंधित जानकारी",
-                    },
-                    {
-                        "key": "D",
-                        "text": "बाहरी अनुमान",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    "MCQ को दिए गए article की "
-                    "उपलब्ध जानकारी पर आधारित होना चाहिए।"
-                ),
-            },
-        ]
-
-    else:
-
-        questions = [
-
-            {
-                "question": (
-                    "What is the primary subject "
-                    "of this news article?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": title,
-                    },
-                    {
-                        "key": "B",
-                        "text": "Weather information",
-                    },
-                    {
-                        "key": "C",
-                        "text": "Sports information",
-                    },
-                    {
-                        "key": "D",
-                        "text": "Entertainment information",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    "The article title identifies "
-                    "the primary subject."
-                ),
-            },
-
-            {
-                "question": (
-                    "What type of information is "
-                    "provided in the article?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": "News content",
-                    },
-                    {
-                        "key": "B",
-                        "text": "Only weather information",
-                    },
-                    {
-                        "key": "C",
-                        "text": "Only sports information",
-                    },
-                    {
-                        "key": "D",
-                        "text": "No information",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    "The supplied article contains "
-                    "news-related content."
-                ),
-            },
-
-            {
-                "question": (
-                    "Which examination context "
-                    "is specified?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": exam,
-                    },
-                    {
-                        "key": "B",
-                        "text": "SSC",
-                    },
-                    {
-                        "key": "C",
-                        "text": "Banking",
-                    },
-                    {
-                        "key": "D",
-                        "text": "Railway",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    f"The requested examination "
-                    f"context is {exam}."
-                ),
-            },
-
-            {
-                "question": (
-                    "What is the category of "
-                    "the news article?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": category,
-                    },
-                    {
-                        "key": "B",
-                        "text": "Entertainment",
-                    },
-                    {
-                        "key": "C",
-                        "text": "Sports",
-                    },
-                    {
-                        "key": "D",
-                        "text": "Weather",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    f"The article category is "
-                    f"{category}."
-                ),
-            },
-
-            {
-                "question": (
-                    "What information should be "
-                    "used when generating questions "
-                    "from this article?"
-                ),
-                "options": [
-                    {
-                        "key": "A",
-                        "text": (
-                            "Only information available "
-                            "in the article"
-                        ),
-                    },
-                    {
-                        "key": "B",
-                        "text": "Invented facts",
-                    },
-                    {
-                        "key": "C",
-                        "text": "Unrelated information",
-                    },
-                    {
-                        "key": "D",
-                        "text": "Unsupported assumptions",
-                    },
-                ],
-                "correct_answer": "A",
-                "explanation": (
-                    "Questions should be based only "
-                    "on information contained in "
-                    "the supplied article."
-                ),
-            },
-        ]
+    numeric_facts = _extract_numeric_facts(
+        description
+    )
 
     result: list[
         dict[str, Any]
     ] = []
 
-    for item in questions[:count]:
+    used_questions: set[str] = set()
+
+    # --------------------------------------------------------
+    # Numeric factual questions
+    # --------------------------------------------------------
+
+    numeric_templates_hi = [
+        (
+            "समाचार के अनुसार, निम्नलिखित में से कौन-सा "
+            "आंकड़ा/मान सही है?"
+        ),
+        (
+            "दिए गए समाचार के अनुसार, निम्नलिखित में से "
+            "कौन-सा आंकड़ा उल्लेखित है?"
+        ),
+        (
+            "समाचार में उल्लिखित संख्या/मान के संबंध में "
+            "निम्नलिखित में से कौन-सा सही है?"
+        ),
+    ]
+
+    numeric_templates_en = [
+        (
+            "According to the article, which of the "
+            "following figures is correct?"
+        ),
+        (
+            "Which of the following figures is mentioned "
+            "in the article?"
+        ),
+        (
+            "According to the article, which of the "
+            "following values is correct?"
+        ),
+    ]
+
+    for index, (
+        value,
+        context,
+    ) in enumerate(numeric_facts):
+
+        if len(result) >= count:
+            break
+
+        if language == "hi":
+
+            question_text = (
+                numeric_templates_hi[
+                    index % len(
+                        numeric_templates_hi
+                    )
+                ]
+            )
+
+            explanation = (
+                f"समाचार में यह आंकड़ा स्पष्ट रूप से "
+                f"उल्लेखित है: {value}।"
+            )
+
+        else:
+
+            question_text = (
+                numeric_templates_en[
+                    index % len(
+                        numeric_templates_en
+                    )
+                ]
+            )
+
+            explanation = (
+                f"The article explicitly mentions "
+                f"the figure {value}."
+            )
+
+        key = _question_key(
+            question_text
+        )
+
+        if key in used_questions:
+            continue
+
+        used_questions.add(key)
+
+        # Generate numeric distractors.
+        number_match = re.search(
+            r"\d[\d,]*(?:\.\d+)?",
+            value,
+        )
+
+        if number_match:
+
+            raw_number = number_match.group(0)
+
+            try:
+
+                number = float(
+                    raw_number.replace(
+                        ",",
+                        "",
+                    )
+                )
+
+                if number >= 1000:
+
+                    alternatives = [
+                        f"{int(number * 0.5):,}",
+                        f"{int(number * 0.75):,}",
+                        f"{int(number * 1.25):,}",
+                    ]
+
+                elif number >= 100:
+
+                    alternatives = [
+                        f"{int(number * 0.5)}",
+                        f"{int(number * 0.75)}",
+                        f"{int(number * 1.5)}",
+                    ]
+
+                else:
+
+                    alternatives = [
+                        f"{max(1, int(number) - 10)}",
+                        f"{max(1, int(number) + 10)}",
+                        f"{max(1, int(number) * 2)}",
+                    ]
+
+                suffix = value[
+                    number_match.end():
+                ]
+
+                correct = (
+                    raw_number
+                    + suffix
+                )
+
+                alternatives = [
+                    alt + suffix
+                    for alt in alternatives
+                ]
+
+            except Exception:
+
+                correct = value
+
+                alternatives = [
+                    "The article does not specify this",
+                    "A different value",
+                    "No figure is mentioned",
+                ]
+
+        else:
+
+            correct = value
+
+            alternatives = [
+                "The article does not specify this",
+                "A different value",
+                "No figure is mentioned",
+            ]
+
+        options = _fallback_option_set(
+            correct=correct,
+            alternatives=alternatives,
+        )
+
+        correct_key = _find_correct_option_key(
+            options,
+            correct,
+        )
 
         result.append(
             {
-                "question": item["question"],
-                "options": item["options"],
-                "correct_answer": item[
-                    "correct_answer"
-                ],
-                "explanation": item[
-                    "explanation"
-                ],
+                "question": question_text,
+                "options": options,
+                "correct_answer": correct_key,
+                "explanation": explanation,
                 "difficulty": difficulty,
                 "exam": exam,
                 "category": category,
-                "topic": None,
+                "topic": topic or None,
                 "state": state or None,
                 "language": language,
                 "question_type": question_type,
@@ -1523,7 +2009,110 @@ def _fallback_mcqs(
             }
         )
 
-    return result
+    # --------------------------------------------------------
+    # Sentence-based factual questions
+    # --------------------------------------------------------
+
+    for index, sentence in enumerate(
+        sentences
+    ):
+
+        if len(result) >= count:
+            break
+
+        if len(sentence) < 30:
+            continue
+
+        if language == "hi":
+
+            question_text = (
+                "दिए गए समाचार के अनुसार, "
+                "निम्नलिखित में से कौन-सा कथन सही है?"
+            )
+
+            correct = sentence
+
+            alternatives = [
+                "यह तथ्य समाचार में उल्लेखित नहीं है",
+                "यह केवल काल्पनिक जानकारी है",
+                "यह समाचार की सामग्री के विपरीत है",
+            ]
+
+            explanation = (
+                "सही विकल्प दिए गए समाचार की सामग्री "
+                "से सीधे लिया गया है।"
+            )
+
+        else:
+
+            question_text = (
+                "According to the article, which of "
+                "the following statements is correct?"
+            )
+
+            correct = sentence
+
+            alternatives = [
+                "This fact is not mentioned in the article",
+                "This is only hypothetical information",
+                "This contradicts the article",
+            ]
+
+            explanation = (
+                "The correct option is directly supported "
+                "by the supplied article."
+            )
+
+        key = _question_key(
+            question_text
+        )
+
+        # Add sentence-specific uniqueness.
+        key = key + "|" + _question_key(
+            sentence[:80]
+        )
+
+        if key in used_questions:
+            continue
+
+        used_questions.add(key)
+
+        options = _fallback_option_set(
+            correct=correct,
+            alternatives=alternatives,
+        )
+
+        correct_key = _find_correct_option_key(
+            options,
+            correct,
+        )
+
+        result.append(
+            {
+                "question": question_text,
+                "options": options,
+                "correct_answer": correct_key,
+                "explanation": explanation,
+                "difficulty": difficulty,
+                "exam": exam,
+                "category": category,
+                "topic": topic or None,
+                "state": state or None,
+                "language": language,
+                "question_type": question_type,
+                "generation_source": "fallback",
+            }
+        )
+
+    # --------------------------------------------------------
+    # Final deduplication
+    # --------------------------------------------------------
+
+    result = _deduplicate_questions(
+        result
+    )
+
+    return result[:count]
 
 
 # ============================================================
@@ -1538,6 +2127,10 @@ def generate_news_mcqs(
     difficulty: str = "Medium",
     question_type: str = "single_correct",
 ) -> list[dict[str, Any]]:
+
+    # --------------------------------------------------------
+    # Normalize inputs
+    # --------------------------------------------------------
 
     exam = _normalize_exam(
         exam
@@ -1555,19 +2148,16 @@ def generate_news_mcqs(
         question_type
     )
 
-    try:
-        count = int(count)
-    except Exception:
-        count = 5
-
-    count = max(
-        1,
-        min(count, 10),
+    count = _safe_int(
+        count,
+        default=5,
+        minimum=1,
+        maximum=10,
     )
 
-    # ========================================================
-    # ARTICLE VALIDATION
-    # ========================================================
+    # --------------------------------------------------------
+    # Article validation
+    # --------------------------------------------------------
 
     if article is None:
 
@@ -1597,9 +2187,9 @@ def generate_news_mcqs(
 
         return []
 
-    # ========================================================
-    # GROQ CLIENT
-    # ========================================================
+    # --------------------------------------------------------
+    # Groq client
+    # --------------------------------------------------------
 
     client = _get_client()
 
@@ -1607,7 +2197,7 @@ def generate_news_mcqs(
 
         logger.warning(
             "Groq unavailable | article_id=%s | "
-            "using deterministic fallback.",
+            "using intelligent fallback.",
             article_id,
         )
 
@@ -1620,60 +2210,88 @@ def generate_news_mcqs(
             question_type=question_type,
         )
 
-    best_questions: list[
+    # --------------------------------------------------------
+    # Generate requested MCQs
+    # --------------------------------------------------------
+
+    collected: list[
         dict[str, Any]
     ] = []
 
-    # ========================================================
-    # RETRY LOOP
-    # ========================================================
+    total_attempts = max(
+        1,
+        MCQ_MAX_ATTEMPTS,
+    )
 
     for attempt in range(
         1,
-        MCQ_MAX_ATTEMPTS + 1,
+        total_attempts + 1,
     ):
+
+        remaining = count - len(
+            collected
+        )
+
+        if remaining <= 0:
+            break
+
+        logger.info(
+            "Generating MCQs | "
+            "article_id=%s | attempt=%s/%s | "
+            "requested=%s | collected=%s | remaining=%s | "
+            "exam=%s | language=%s | type=%s | model=%s",
+            article_id,
+            attempt,
+            total_attempts,
+            count,
+            len(collected),
+            remaining,
+            exam,
+            language,
+            question_type,
+            GROQ_MODEL,
+        )
+
+        # ----------------------------------------------------
+        # Existing generated questions
+        # ----------------------------------------------------
+
+        existing_questions = [
+            item.get(
+                "question",
+                "",
+            )
+            for item in collected
+            if item.get("question")
+        ]
+
+        # ----------------------------------------------------
+        # Prompt
+        # ----------------------------------------------------
 
         prompt = _build_mcq_prompt(
             article=article,
             exam=exam,
             language=language,
-            count=count,
+            count=remaining,
             difficulty=difficulty,
             question_type=question_type,
+            existing_questions=existing_questions,
             retry=attempt > 1,
         )
 
-        logger.info(
-            "Generating MCQs | "
-            "article_id=%s | "
-            "attempt=%s/%s | "
-            "count=%s | "
-            "exam=%s | "
-            "language=%s | "
-            "model=%s",
-            article_id,
-            attempt,
-            MCQ_MAX_ATTEMPTS,
-            count,
-            exam,
-            language,
-            GROQ_MODEL,
-        )
+        # ----------------------------------------------------
+        # Groq request
+        # ----------------------------------------------------
 
         try:
 
-            # IMPORTANT:
-            # Never pass response_format=json_object.
             content = _call_groq_mcq(
                 client=client,
                 prompt=prompt,
             )
 
         except Exception as exc:
-
-            # ------------------------------------------------
-            # RATE LIMIT
-            # ------------------------------------------------
 
             if _is_rate_limit_error(exc):
 
@@ -1683,17 +2301,16 @@ def generate_news_mcqs(
                     )
                 )
 
-                if attempt < MCQ_MAX_ATTEMPTS:
+                logger.warning(
+                    "Groq rate limit | "
+                    "article_id=%s | attempt=%s | "
+                    "waiting=%.1fs",
+                    article_id,
+                    attempt,
+                    wait_seconds,
+                )
 
-                    logger.warning(
-                        "Groq rate limit | "
-                        "article_id=%s | "
-                        "attempt=%s | "
-                        "waiting=%.1fs",
-                        article_id,
-                        attempt,
-                        wait_seconds,
-                    )
+                if attempt < total_attempts:
 
                     time.sleep(
                         wait_seconds
@@ -1701,25 +2318,19 @@ def generate_news_mcqs(
 
                 continue
 
-            # ------------------------------------------------
-            # OTHER API ERROR
-            # ------------------------------------------------
-
             logger.error(
                 "Groq MCQ API failed | "
-                "article_id=%s | "
-                "attempt=%s | "
+                "article_id=%s | attempt=%s | "
                 "error=%s",
                 article_id,
                 attempt,
                 exc,
             )
 
-            if attempt < MCQ_MAX_ATTEMPTS:
+            if attempt < total_attempts:
 
                 delay = (
                     MCQ_RETRY_DELAY_SECONDS
-                    * attempt
                     + random.uniform(
                         0.0,
                         0.5,
@@ -1732,38 +2343,24 @@ def generate_news_mcqs(
 
             continue
 
-        # ====================================================
-        # EMPTY RESPONSE
-        # ====================================================
+        # ----------------------------------------------------
+        # Empty response
+        # ----------------------------------------------------
 
         if not content:
 
             logger.warning(
                 "Empty Groq response | "
-                "article_id=%s | "
-                "attempt=%s",
+                "article_id=%s | attempt=%s",
                 article_id,
                 attempt,
             )
 
-            if attempt < MCQ_MAX_ATTEMPTS:
-
-                time.sleep(
-                    MCQ_RETRY_DELAY_SECONDS
-                    * attempt
-                )
-
             continue
-
-        # ====================================================
-        # RESPONSE PREVIEW
-        # ====================================================
 
         logger.debug(
             "Groq raw response preview | "
-            "article_id=%s | "
-            "attempt=%s | "
-            "response=%s",
+            "article_id=%s | attempt=%s | response=%s",
             article_id,
             attempt,
             content[
@@ -1771,9 +2368,9 @@ def generate_news_mcqs(
             ],
         )
 
-        # ====================================================
-        # PARSE JSON LOCALLY
-        # ====================================================
+        # ----------------------------------------------------
+        # Parse JSON
+        # ----------------------------------------------------
 
         parsed = _extract_json(
             content
@@ -1783,24 +2380,16 @@ def generate_news_mcqs(
 
             logger.warning(
                 "Invalid JSON returned by Groq | "
-                "article_id=%s | "
-                "attempt=%s",
+                "article_id=%s | attempt=%s",
                 article_id,
                 attempt,
             )
 
-            if attempt < MCQ_MAX_ATTEMPTS:
-
-                time.sleep(
-                    MCQ_RETRY_DELAY_SECONDS
-                    * attempt
-                )
-
             continue
 
-        # ====================================================
-        # EXTRACT QUESTIONS
-        # ====================================================
+        # ----------------------------------------------------
+        # Extract questions
+        # ----------------------------------------------------
 
         if isinstance(
             parsed,
@@ -1819,10 +2408,13 @@ def generate_news_mcqs(
                 if parsed.get(
                     "question"
                 ):
+
                     raw_questions = [
                         parsed
                     ]
+
                 else:
+
                     raw_questions = []
 
         elif isinstance(
@@ -1840,21 +2432,18 @@ def generate_news_mcqs(
 
             logger.warning(
                 "Groq JSON contains no questions | "
-                "article_id=%s | "
-                "attempt=%s",
+                "article_id=%s | attempt=%s",
                 article_id,
                 attempt,
             )
 
             continue
 
-        # ====================================================
-        # NORMALIZE + VALIDATE
-        # ====================================================
+        # ----------------------------------------------------
+        # Normalize + validate
+        # ----------------------------------------------------
 
-        current_questions: list[
-            dict[str, Any]
-        ] = []
+        accepted_this_attempt = 0
 
         for item in raw_questions:
 
@@ -1871,118 +2460,193 @@ def generate_news_mcqs(
 
                 logger.warning(
                     "Skipping invalid AI-generated MCQ | "
+                    "article_id=%s | attempt=%s",
+                    article_id,
+                    attempt,
+                )
+
+                continue
+
+            # ------------------------------------------------
+            # Duplicate detection
+            # ------------------------------------------------
+
+            candidate_key = _question_key(
+                normalized["question"]
+            )
+
+            duplicate = False
+
+            for existing in collected:
+
+                existing_key = _question_key(
+                    existing.get(
+                        "question",
+                        "",
+                    )
+                )
+
+                if (
+                    candidate_key
+                    and candidate_key
+                    == existing_key
+                ):
+
+                    duplicate = True
+                    break
+
+            if duplicate:
+
+                logger.warning(
+                    "Duplicate MCQ skipped | "
                     "article_id=%s",
                     article_id,
                 )
 
                 continue
 
-            current_questions.append(
+            normalized[
+                "generation_source"
+            ] = "groq"
+
+            collected.append(
                 normalized
             )
 
-        # ====================================================
-        # DEDUPLICATE
-        # ====================================================
-
-        current_questions = (
-            _deduplicate_questions(
-                current_questions
-            )
-        )
-
-        # ====================================================
-        # KEEP BEST RESULT
-        # ====================================================
-
-        if len(
-            current_questions
-        ) > len(
-            best_questions
-        ):
-
-            best_questions = (
-                current_questions
-            )
-
-        # ====================================================
-        # COMPLETE RESULT
-        # ====================================================
-
-        if len(
-            current_questions
-        ) >= count:
-
-            result = current_questions[
-                :count
-            ]
-
-            for item in result:
-
-                item[
-                    "generation_source"
-                ] = "groq"
+            accepted_this_attempt += 1
 
             logger.info(
-                "Groq MCQ generation successful | "
+                "MCQ accepted | "
                 "article_id=%s | "
-                "generated=%s | "
-                "attempt=%s",
+                "attempt=%s | collected=%s/%s",
                 article_id,
-                len(result),
                 attempt,
+                len(collected),
+                count,
             )
 
-            return result
+            if len(collected) >= count:
+                break
 
-        logger.warning(
-            "Partial Groq MCQ result | "
-            "article_id=%s | "
-            "generated=%s/%s | "
-            "attempt=%s",
+        logger.info(
+            "MCQ attempt completed | "
+            "article_id=%s | attempt=%s | "
+            "accepted=%s | total=%s/%s",
             article_id,
-            len(current_questions),
-            count,
             attempt,
+            accepted_this_attempt,
+            len(collected),
+            count,
         )
 
-    # ========================================================
-    # PARTIAL AI RESULT
-    # ========================================================
+        # ----------------------------------------------------
+        # Success
+        # ----------------------------------------------------
 
-    if len(
-        best_questions
-    ) >= 1:
+        if len(collected) >= count:
+            break
+
+        # ----------------------------------------------------
+        # Delay before retry
+        # ----------------------------------------------------
+
+        if attempt < total_attempts:
+
+            time.sleep(
+                0.25
+            )
+
+    # --------------------------------------------------------
+    # Final deduplication
+    # --------------------------------------------------------
+
+    collected = _deduplicate_questions(
+        collected
+    )
+
+    # --------------------------------------------------------
+    # Full success
+    # --------------------------------------------------------
+
+    if len(collected) >= count:
+
+        logger.info(
+            "Groq MCQ generation successful | "
+            "article_id=%s | generated=%s",
+            article_id,
+            len(collected),
+        )
+
+        return collected[:count]
+
+    # --------------------------------------------------------
+    # Partial AI result
+    # --------------------------------------------------------
+
+    if collected:
 
         logger.warning(
             "Groq generated partial MCQs | "
-            "article_id=%s | "
-            "generated=%s/%s | "
-            "using partial result.",
+            "article_id=%s | generated=%s/%s",
             article_id,
-            len(best_questions),
+            len(collected),
             count,
         )
 
-        for item in best_questions:
+        # Try intelligent fallback only for missing questions.
+        fallback_needed = count - len(
+            collected
+        )
 
-            item[
-                "generation_source"
-            ] = "groq_partial"
+        fallback_items = _fallback_mcqs(
+            article=article,
+            exam=exam,
+            language=language,
+            count=fallback_needed + 2,
+            difficulty=difficulty,
+            question_type=question_type,
+        )
 
-        return best_questions
+        for item in fallback_items:
 
-    # ========================================================
-    # FINAL FALLBACK
-    # ========================================================
+            candidate_key = _question_key(
+                item.get(
+                    "question",
+                    "",
+                )
+            )
+
+            duplicate = any(
+                candidate_key
+                == _question_key(
+                    existing.get(
+                        "question",
+                        "",
+                    )
+                )
+                for existing in collected
+            )
+
+            if duplicate:
+                continue
+
+            collected.append(item)
+
+            if len(collected) >= count:
+                break
+
+        return _deduplicate_questions(
+            collected
+        )[:count]
+
+    # --------------------------------------------------------
+    # Final intelligent fallback
+    # --------------------------------------------------------
 
     logger.warning(
         "Groq MCQ generation failed completely | "
-        "article_id=%s | "
-        "attempts=%s | "
-        "using deterministic fallback.",
+        "article_id=%s | using intelligent fallback.",
         article_id,
-        MCQ_MAX_ATTEMPTS,
     )
 
     return _fallback_mcqs(
@@ -2027,6 +2691,18 @@ def generate_prelims_notes(
         title
     )
 
+    description = _clean_text(
+        description
+    )
+
+    if description:
+
+        return (
+            "Important for competitive examinations:\n\n"
+            f"{title}\n\n"
+            f"{description}"
+        )
+
     return (
         "Important for competitive examinations: "
         f"{title}"
@@ -2042,9 +2718,24 @@ def generate_mains_notes(
         title
     )
 
+    description = _clean_text(
+        description
+    )
+
+    if description:
+
+        return (
+            "Analyze the following current-affairs issue "
+            "from a mains perspective:\n\n"
+            f"{title}\n\n"
+            f"{description}\n\n"
+            "Focus on significance, impact, "
+            "opportunities, challenges, "
+            "stakeholders and possible way forward."
+        )
+
     return (
         "Analyze the significance, impact, "
         "opportunities and challenges related to: "
         f"{title}"
     )
-

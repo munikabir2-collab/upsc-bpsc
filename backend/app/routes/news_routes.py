@@ -1,6 +1,6 @@
-
 from __future__ import annotations
 
+import inspect
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -12,7 +12,9 @@ from fastapi import (
     HTTPException,
     Query,
 )
+
 from pydantic import BaseModel
+
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -48,10 +50,14 @@ from app.services.news_filter import (
     rank_news,
 )
 
+# ============================================================
+# MCQ SERVICE
+# ============================================================
+
 from app.services.news_mcq_service import (
     generate_mcqs,
+    delete_article_mcqs,
     mcq_to_dict,
-    mcqs_to_dict,
 )
 
 from app.services.news_payment_service import (
@@ -109,18 +115,6 @@ SUPPORTED_QUESTION_TYPES = {
 # ============================================================
 
 class NewsPaymentVerifyRequest(BaseModel):
-    """
-    Razorpay payment verification payload.
-
-    Frontend should send:
-
-    {
-        "razorpay_order_id": "...",
-        "razorpay_payment_id": "...",
-        "razorpay_signature": "..."
-    }
-    """
-
     razorpay_order_id: str
     razorpay_payment_id: str
     razorpay_signature: str
@@ -314,7 +308,6 @@ BIHAR_LOCATION_TERMS = {
     "seemanchal",
     "kosi",
 }
-
 
 # ============================================================
 # SAFE HELPERS
@@ -2242,7 +2235,6 @@ def practice_mcqs(
     response_model=NewsMCQListResponse,
 )
 def get_article_mcqs(
-
     article_id: int,
 
     exam: str = Query(
@@ -2265,18 +2257,28 @@ def get_article_mcqs(
         get_current_user
     ),
 ):
+    # ------------------------------------------------------------
+    # NEWS ACCESS CHECK
+    # ------------------------------------------------------------
 
     _check_news_access(
         db=db,
         current_user=current_user,
     )
 
-    if article_id <= 0:
+    # ------------------------------------------------------------
+    # VALIDATE ARTICLE ID
+    # ------------------------------------------------------------
 
+    if article_id <= 0:
         raise HTTPException(
             status_code=400,
             detail="Invalid article ID",
         )
+
+    # ------------------------------------------------------------
+    # NORMALIZE FILTERS
+    # ------------------------------------------------------------
 
     exam = normalize_exam(
         exam
@@ -2290,41 +2292,53 @@ def get_article_mcqs(
         difficulty
     )
 
+    # ------------------------------------------------------------
+    # CHECK ARTICLE EXISTS
+    # ------------------------------------------------------------
+
     article = (
         db.query(CurrentAffair)
         .filter(
-            CurrentAffair.id
-            == article_id
+            CurrentAffair.id == article_id
         )
         .first()
     )
 
     if not article:
-
         raise HTTPException(
             status_code=404,
             detail="News article not found",
         )
 
+    # ------------------------------------------------------------
+    # GET EXISTING MCQs
+    # ------------------------------------------------------------
+
     query = (
         db.query(MCQ)
         .filter(
-            MCQ.current_affair_id
-            == article_id,
-            MCQ.exam
-            == exam,
-            MCQ.language
-            == language,
+            MCQ.current_affair_id == article_id,
+
+            MCQ.exam == exam,
+
+            MCQ.language == language,
+
             MCQ.is_active.is_(True),
         )
     )
 
-    if difficulty:
+    # ------------------------------------------------------------
+    # DIFFICULTY FILTER
+    # ------------------------------------------------------------
 
+    if difficulty:
         query = query.filter(
-            MCQ.difficulty
-            == difficulty
+            MCQ.difficulty == difficulty
         )
+
+    # ------------------------------------------------------------
+    # FETCH
+    # ------------------------------------------------------------
 
     questions = (
         query
@@ -2334,9 +2348,17 @@ def get_article_mcqs(
         .all()
     )
 
+    # ------------------------------------------------------------
+    # RESPONSE
+    # ------------------------------------------------------------
+
     return {
         "status": "success",
-        "total": len(questions),
+
+        "total": len(
+            questions
+        ),
+
         "mcqs": [
             mcq_to_dict(
                 question
@@ -2344,8 +2366,6 @@ def get_article_mcqs(
             for question in questions
         ],
     }
-
-
 # ============================================================
 # GENERATE ARTICLE MCQs
 # ============================================================
@@ -2354,84 +2374,228 @@ def get_article_mcqs(
     "/{article_id}/mcqs/generate",
     response_model=MCQGenerateResponse,
 )
-def generate_article_mcqs(
-
+async def generate_article_mcqs(
     article_id: int,
-
     request: MCQGenerateRequest,
-
-    db: Session = Depends(
-        get_db
-    ),
-
-    current_user=Depends(
-        get_current_user
-    ),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
+    """
+    Generate AI MCQs from a CurrentAffair article.
 
-    _check_news_access(
-        db=db,
-        current_user=current_user,
-    )
+    MCQ generation is FREE.
+    No ₹1 news-payment check is applied here.
+
+    Endpoint:
+        POST /news/{article_id}/mcqs/generate
+    """
+
+    # ========================================================
+    # AUTHENTICATION
+    # ========================================================
+
+    # current_user dependency keeps this endpoint authenticated.
+    # IMPORTANT:
+    # _check_news_access() is intentionally NOT called here.
+    #
+    # Therefore MCQ generation does NOT require the ₹1 payment.
+
+    if current_user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required.",
+        )
+
+    # ========================================================
+    # ARTICLE ID VALIDATION
+    # ========================================================
 
     if article_id <= 0:
-
         raise HTTPException(
             status_code=400,
-            detail="Invalid article ID",
+            detail="Invalid article ID.",
         )
+
+    # ========================================================
+    # GET ARTICLE
+    # ========================================================
 
     article = (
         db.query(CurrentAffair)
         .filter(
-            CurrentAffair.id
-            == article_id
+            CurrentAffair.id == article_id
         )
         .first()
     )
 
-    if not article:
-
+    if article is None:
         raise HTTPException(
             status_code=404,
-            detail="News article not found",
+            detail="News article not found.",
         )
 
-    exam = normalize_exam(
-        request.exam
-        or "UPSC"
-    )
+    # ========================================================
+    # NORMALIZE REQUEST
+    # ========================================================
 
-    language = normalize_language(
-        request.language
-        or "en"
-    )
+    try:
+        exam = normalize_exam(
+            getattr(
+                request,
+                "exam",
+                None,
+            )
+            or "UPSC"
+        )
 
-    difficulty = normalize_difficulty(
-        request.difficulty
-        or "Medium"
-    )
+        language = normalize_language(
+            getattr(
+                request,
+                "language",
+                None,
+            )
+            or "en"
+        )
 
-    question_type = normalize_question_type(
-        request.question_type
-        or "mcq"
-    )
+        difficulty = normalize_difficulty(
+            getattr(
+                request,
+                "difficulty",
+                None,
+            )
+            or "Medium"
+        )
 
-    count = _safe_int(
-        request.count,
-        5,
-    )
+        question_type = normalize_question_type(
+            getattr(
+                request,
+                "question_type",
+                None,
+            )
+            or "single_correct"
+        )
 
-    if count < 1 or count > 20:
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+
+        logger.exception(
+            "MCQ request normalization failed | article=%s",
+            article_id,
+        )
 
         raise HTTPException(
-            status_code=400,
-            detail="count must be between 1 and 20",
+            status_code=422,
+            detail="Invalid MCQ generation request.",
+        ) from exc
+
+    # ========================================================
+    # COUNT
+    # ========================================================
+
+    try:
+        count = _safe_int(
+            getattr(
+                request,
+                "count",
+                5,
+            ),
+            5,
         )
+
+    except Exception:
+        count = 5
+
+    if count < 1 or count > 20:
+        raise HTTPException(
+            status_code=400,
+            detail="count must be between 1 and 20.",
+        )
+
+    # ========================================================
+    # ARTICLE CONTENT
+    # ========================================================
+
+    title = _clean_text(
+        getattr(
+            article,
+            "title",
+            None,
+        )
+    )
+
+    description = _clean_text(
+        getattr(
+            article,
+            "description",
+            None,
+        )
+    )
+
+    content = _clean_text(
+        getattr(
+            article,
+            "content",
+            None,
+        )
+    )
+
+    summary = _clean_text(
+        getattr(
+            article,
+            "summary",
+            None,
+        )
+    )
+
+    article_text = " ".join(
+        part
+        for part in [
+            title,
+            description,
+            content,
+            summary,
+        ]
+        if part
+    ).strip()
+
+    if not article_text:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This news article does not contain "
+                "enough content to generate MCQs."
+            ),
+        )
+
+    # ========================================================
+    # LOG REQUEST
+    # ========================================================
+
+    logger.info(
+        (
+            "FREE MCQ generation started | "
+            "article=%s | user=%s | exam=%s | "
+            "language=%s | difficulty=%s | "
+            "count=%s | type=%s"
+        ),
+        article_id,
+        getattr(current_user, "id", None),
+        exam,
+        language,
+        difficulty,
+        count,
+        question_type,
+    )
+
+    # ========================================================
+    # GENERATE MCQs
+    # ========================================================
 
     try:
 
-        questions = generate_mcqs(
+        result = generate_mcqs(
             db=db,
             article=article,
             exam=exam,
@@ -2441,63 +2605,255 @@ def generate_article_mcqs(
             question_type=question_type,
         )
 
-        if not questions:
+        # ----------------------------------------------------
+        # SUPPORT SYNC + ASYNC SERVICE
+        # ----------------------------------------------------
+
+        if inspect.isawaitable(result):
+            questions = await result
+        else:
+            questions = result
+
+        # ----------------------------------------------------
+        # VALIDATE RESULT
+        # ----------------------------------------------------
+
+        if questions is None:
+
+            db.rollback()
 
             raise HTTPException(
                 status_code=422,
-                detail="AI could not generate valid MCQs.",
+                detail="AI returned no MCQs.",
             )
 
+        if not isinstance(
+            questions,
+            (list, tuple),
+        ):
+
+            db.rollback()
+
+            logger.error(
+                (
+                    "Invalid MCQ service response | "
+                    "type=%s | article=%s"
+                ),
+                type(questions).__name__,
+                article_id,
+            )
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "MCQ generation service returned "
+                    "an invalid response."
+                ),
+            )
+
+        questions = list(questions)
+
+        if not questions:
+
+            db.rollback()
+
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "AI could not generate valid MCQs "
+                    "from this article."
+                ),
+            )
+
+        # ====================================================
+        # COMMIT
+        # ====================================================
+
         db.commit()
+
+        # ====================================================
+        # REFRESH
+        # ====================================================
+
+        refreshed_questions = []
 
         for question in questions:
 
             try:
+
                 db.refresh(question)
+
+                refreshed_questions.append(
+                    question
+                )
+
             except Exception:
-                pass
+
+                logger.warning(
+                    (
+                        "Could not refresh generated MCQ "
+                        "| article=%s"
+                    ),
+                    article_id,
+                )
+
+                refreshed_questions.append(
+                    question
+                )
+
+        questions = refreshed_questions
+
+        # ====================================================
+        # SERIALIZE
+        # ====================================================
+
+        serialized_questions = []
+
+        for question in questions:
+
+            try:
+
+                serialized = mcq_to_dict(
+                    question
+                )
+
+                if serialized:
+                    serialized_questions.append(
+                        serialized
+                    )
+
+            except Exception:
+
+                logger.exception(
+                    (
+                        "Failed to serialize MCQ "
+                        "| article=%s"
+                    ),
+                    article_id,
+                )
+
+        if not serialized_questions:
+
+            logger.error(
+                (
+                    "MCQs generated but serialization "
+                    "returned empty result | article=%s"
+                ),
+                article_id,
+            )
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "MCQs were generated but could "
+                    "not be returned."
+                ),
+            )
+
+        # ====================================================
+        # SUCCESS
+        # ====================================================
+
+        logger.info(
+            (
+                "FREE MCQ generation successful | "
+                "article=%s | generated=%s"
+            ),
+            article_id,
+            len(serialized_questions),
+        )
+
+        return {
+            "status": "success",
+            "current_affair_id": article.id,
+            "generated": len(
+                serialized_questions
+            ),
+            "questions": serialized_questions,
+        }
+
+    # ========================================================
+    # HTTP EXCEPTION
+    # ========================================================
 
     except HTTPException:
 
         db.rollback()
         raise
 
+    # ========================================================
+    # VALIDATION / VALUE ERROR
+    # ========================================================
+
     except ValueError as exc:
 
         db.rollback()
+
+        logger.warning(
+            (
+                "MCQ generation validation error | "
+                "article=%s | error=%s"
+            ),
+            article_id,
+            str(exc),
+        )
 
         raise HTTPException(
             status_code=422,
             detail=str(exc),
         ) from exc
 
+    # ========================================================
+    # DATABASE INTEGRITY ERROR
+    # ========================================================
+
+    except IntegrityError as exc:
+
+        db.rollback()
+
+        logger.exception(
+            (
+                "MCQ database integrity error | "
+                "article=%s"
+            ),
+            article_id,
+        )
+
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "MCQs could not be saved because "
+                "of a database constraint."
+            ),
+        ) from exc
+
+    # ========================================================
+    # OTHER ERROR
+    # ========================================================
+
     except Exception as exc:
 
         db.rollback()
 
         logger.exception(
-            "MCQ generation failed | article=%s",
+            (
+                "FREE MCQ generation failed | "
+                "article=%s | exam=%s | "
+                "language=%s | difficulty=%s"
+            ),
             article_id,
+            exam,
+            language,
+            difficulty,
         )
 
         raise HTTPException(
             status_code=500,
-            detail="MCQ generation failed",
+            detail=(
+                "MCQ generation failed. "
+                "Check backend logs for details."
+            ),
         ) from exc
-
-    return {
-        "status": "success",
-        "current_affair_id": article.id,
-        "generated": len(questions),
-        "questions": [
-            mcq_to_dict(
-                question
-            )
-            for question in questions
-        ],
-    }
-
-
 # ============================================================
 # SINGLE ARTICLE
 # ALWAYS LAST
