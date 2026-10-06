@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API_URL = "https://upsc-bpsc.onrender.com";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function Signup() {
     const navigate = useNavigate();
@@ -311,4 +311,3 @@ const inputStyle = {
 };
 
 export default Signup;
-

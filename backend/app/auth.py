@@ -27,12 +27,10 @@ JWT_ALGORITHM = os.getenv(
 # ============================================================
 # PASSWORD HASHING
 # ============================================================
-
 pwd_context = CryptContext(
-    schemes=["argon2"],
+    schemes=["argon2", "bcrypt"],
     deprecated="auto",
 )
-
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
