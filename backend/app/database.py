@@ -1,7 +1,10 @@
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+
 DATABASE_URL = "sqlite:///./users.db"
+
 
 engine = create_engine(
     DATABASE_URL,
@@ -10,11 +13,13 @@ engine = create_engine(
     },
 )
 
+
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,
 )
+
 
 Base = declarative_base()
 
@@ -34,7 +39,8 @@ def get_db():
 # ============================================================
 
 def create_tables():
-    # Import models before create_all()
+    # Import all models before create_all()
+    from app.models.user import User
     from app.models.current_affair import CurrentAffair
     from app.models.mcq import MCQ
 
@@ -42,4 +48,3 @@ def create_tables():
         bind=engine
     )
 
-    

@@ -1,7 +1,6 @@
 ﻿from datetime import datetime, timedelta, timezone
 
-import hmac
-import os
+
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
@@ -196,73 +195,4 @@ def login(
         "message": "Login successful",
         "access_token": token,
         "token_type": "bearer",
-    }
-
-# ============================================================================
-# TEMPORARY PRODUCTION PASSWORD RESET
-# REMOVE THIS ENDPOINT IMMEDIATELY AFTER PASSWORD RESET
-# ============================================================================
-
-@router.post("/maintenance/reset-primary-password")
-def reset_primary_password(
-    new_password: str,
-    reset_secret: str = Header(
-        default="",
-        alias="X-Password-Reset-Secret",
-    ),
-    db: Session = Depends(get_db),
-):
-    expected_secret = os.getenv("PASSWORD_RESET_SECRET")
-
-    if not expected_secret:
-        raise HTTPException(
-            status_code=503,
-            detail="Password reset is not configured.",
-        )
-
-    if not hmac.compare_digest(
-        reset_secret,
-        expected_secret,
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Forbidden",
-        )
-
-    if len(new_password) < 8:
-        raise HTTPException(
-            status_code=400,
-            detail="Password must contain at least 8 characters.",
-        )
-
-    target_email = "munikabir2@gmail.com"
-
-    user = (
-        db.query(User)
-        .filter(User.email == target_email)
-        .first()
-    )
-
-    if user is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Primary account not found.",
-        )
-
-    user.password = hash_password(new_password)
-
-    try:
-        db.commit()
-        db.refresh(user)
-    except Exception as exc:
-        db.rollback()
-
-        raise HTTPException(
-            status_code=500,
-            detail="Unable to reset password.",
-        ) from exc
-
-    return {
-        "message": "Primary account password reset successfully.",
-        "email": target_email,
     }
