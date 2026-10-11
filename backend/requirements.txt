@@ -1,4 +1,4 @@
-﻿fastapi
+fastapi
 uvicorn[standard]
 sqlalchemy
 python-dotenv
@@ -11,3 +11,5 @@ requests
 httpx
 razorpay
 groq
+
+psycopg[binary]

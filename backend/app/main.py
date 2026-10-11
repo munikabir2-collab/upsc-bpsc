@@ -9,17 +9,18 @@ from app.database import Base, engine
 # ============================================================
 # MODELS
 # ============================================================
-
 from app.models import (
     User,
     CurrentAffair,
     MCQ,
 )
 
+from app.models.news_payment import NewsDailyPayment
+
+
 from app.models.writing_subscription import (
     WritingSubscription,
 )
-
 # ============================================================
 # ROUTES
 # ============================================================
