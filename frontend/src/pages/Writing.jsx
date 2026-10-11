@@ -93,7 +93,7 @@ const WEEKLY_PLAN = {
 ========================================================================= */
 
 async function apiRequest(endpoint, options = {}) {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token") || sessionStorage.getItem("token");
 
   const headers = {
     Accept: "application/json",
@@ -3967,5 +3967,6 @@ function EvaluationList({
     </div>
   );
 }
+
 
 

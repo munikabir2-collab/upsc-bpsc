@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
@@ -113,7 +113,7 @@ function Login() {
         // Also save auth flag
         storage.setItem("isAuthenticated", "true");
 
-        console.log("TOKEN SAVED:", token);
+        // Token debug logging removed for security.
 
         return token;
     };
