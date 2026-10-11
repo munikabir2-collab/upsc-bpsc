@@ -71,11 +71,15 @@ const CATEGORIES = [
 |--------------------------------------------------------------------------
 */
 
+
 function getToken() {
     return (
         localStorage.getItem("access_token") ||
+        sessionStorage.getItem("access_token") ||
         localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
         localStorage.getItem("jwt") ||
+        sessionStorage.getItem("jwt") ||
         ""
     );
 }
@@ -83,12 +87,15 @@ function getToken() {
 function getUser() {
     try {
         return JSON.parse(
-            localStorage.getItem("user") || "null"
+            localStorage.getItem("user") ||
+            sessionStorage.getItem("user") ||
+            "null"
         );
     } catch {
         return null;
     }
 }
+
 
 function getErrorMessage(
     data,
