@@ -1,4 +1,4 @@
-﻿// src/pages/Dashboard.jsx
+// src/pages/Dashboard.jsx
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -679,7 +679,7 @@ function Dashboard() {
 
                         <h1 style={styles.pageTitle}>
                             {greeting},{" "}
-                            {displayName} ðŸ‘‹
+                            {displayName} 
                         </h1>
 
                         <p style={styles.pageSubtitle}>
@@ -712,7 +712,7 @@ function Dashboard() {
                             onClick={handleRetry}
                             title="Refresh dashboard"
                         >
-                            â†»
+                            
                         </button>
 
                         <button
@@ -720,7 +720,7 @@ function Dashboard() {
                             style={styles.iconButton}
                             title="Notifications"
                         >
-                            ðŸ””
+                            
                         </button>
 
                         <div style={styles.avatar}>
@@ -807,9 +807,7 @@ function Dashboard() {
                             </p>
                         </div>
 
-                        <div style={styles.rocket}>
-                            ðŸš€
-                        </div>
+                        <div style={styles.rocket}></div>
                     </div>
 
                     <div style={styles.quickGrid}>
@@ -833,9 +831,7 @@ function Dashboard() {
                                     </p>
                                 </div>
 
-                                <div style={styles.arrow}>
-                                    â†’
-                                </div>
+                                <div style={styles.arrow}>→</div>
                             </Link>
                         ))}
                     </div>
@@ -894,9 +890,7 @@ function Dashboard() {
                                     </div>
                                 </div>
 
-                                <div style={styles.planArrow}>
-                                    â†’
-                                </div>
+                                <div style={styles.planArrow}>→</div>
                             </Link>
                         ))}
                     </div>
@@ -922,7 +916,7 @@ function Dashboard() {
                             to="/profile"
                             style={styles.profileLink}
                         >
-                            View Profile â†’
+                            View Profile
                         </Link>
                     </div>
 
@@ -964,7 +958,7 @@ function Dashboard() {
                 ================================================= */}
 
                 <footer style={styles.footer}>
-                    Â© 2026 Muni48 Â· UPSC & BPSC Preparation Platform
+                    Copyright 2026 Muni48 - UPSC & BPSC Preparation Platform
                 </footer>
             </main>
         </div>
