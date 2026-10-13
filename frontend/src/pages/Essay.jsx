@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 
 const API_URL =
-    import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+    import.meta.env.PROD ? "https://upsc-bpsc.onrender.com" : (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000");
 
 function Essays() {
     const [essays, setEssays] = useState([]);
@@ -183,7 +183,7 @@ function Essays() {
                         to="/dashboard"
                         style={styles.backButton}
                     >
-                        ← Dashboard
+                        â† Dashboard
                     </Link>
                 </header>
 
@@ -254,14 +254,14 @@ function Essays() {
                     >
                         {generating
                             ? "Generating..."
-                            : "✨ Generate Essay"}
+                            : "âœ¨ Generate Essay"}
                     </button>
                 </section>
 
                 {/* Error */}
                 {error && (
                     <div style={styles.error}>
-                        ⚠️ {error}
+                        âš ï¸ {error}
                     </div>
                 )}
 
@@ -276,7 +276,7 @@ function Essays() {
                 {!loading && essays.length === 0 && !error && (
                     <section style={styles.emptyCard}>
                         <div style={styles.emptyIcon}>
-                            📚
+                            ðŸ“š
                         </div>
 
                         <h2 style={styles.emptyTitle}>
@@ -410,7 +410,7 @@ function Essays() {
                                             styles.practiceButton
                                         }
                                     >
-                                        Practice →
+                                        Practice â†’
                                     </Link>
                                 </article>
                             );

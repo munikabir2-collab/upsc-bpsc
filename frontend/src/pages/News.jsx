@@ -15,7 +15,7 @@ import React, {
 | - Category
 | - Bihar only
 | - News search
-| - ₹1 Razorpay daily access
+| - â‚¹1 Razorpay daily access
 | - Existing MCQ GET
 | - MCQ generation POST JSON
 | - 402 => Razorpay
@@ -24,9 +24,9 @@ import React, {
 |--------------------------------------------------------------------------
 */
 
-const API_URL =
-    import.meta.env.VITE_API_URL ||
-    "http://127.0.0.1:8000";
+const API_URL = import.meta.env.PROD
+    ? "https://upsc-bpsc.onrender.com"
+    : (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000");
 
 const RAZORPAY_SCRIPT =
     "https://checkout.razorpay.com/v1/checkout.js";
@@ -43,7 +43,7 @@ const LANGUAGES = [
     },
     {
         value: "hi",
-        label: "हिंदी",
+        label: "à¤¹à¤¿à¤‚à¤¦à¥€",
     },
 ];
 
@@ -368,113 +368,47 @@ function normalizeMcqs(data) {
 */
 
 function loadRazorpayScript() {
-    return new Promise(
-        (resolve, reject) => {
-            if (
-                typeof window !==
-                    "undefined" &&
-                window.Razorpay
-            ) {
-                resolve(true);
-                return;
-            }
-
-            const existing =
-                document.querySelector(
-                    `script[src="${RAZORPAY_SCRIPT}"]`
-                );
-
-            if (existing) {
-                const onLoad = () => {
-                    cleanup();
-
-                    if (
-                        window.Razorpay
-                    ) {
-                        resolve(true);
-                    } else {
-                        reject(
-                            new Error(
-                                "Razorpay SDK loaded but unavailable."
-                            )
-                        );
-                    }
-                };
-
-                const onError = () => {
-                    cleanup();
-
-                    reject(
-                        new Error(
-                            "Razorpay SDK failed to load."
-                        )
-                    );
-                };
-
-                const cleanup = () => {
-                    existing.removeEventListener(
-                        "load",
-                        onLoad
-                    );
-
-                    existing.removeEventListener(
-                        "error",
-                        onError
-                    );
-                };
-
-                existing.addEventListener(
-                    "load",
-                    onLoad
-                );
-
-                existing.addEventListener(
-                    "error",
-                    onError
-                );
-
-                return;
-            }
-
-            const script =
-                document.createElement(
-                    "script"
-                );
-
-            script.src =
-                RAZORPAY_SCRIPT;
-
-            script.async = true;
-
-            script.onload = () => {
-                if (
-                    window.Razorpay
-                ) {
-                    resolve(true);
-                } else {
-                    reject(
-                        new Error(
-                            "Razorpay SDK unavailable."
-                        )
-                    );
-                }
-            };
-
-            script.onerror = () => {
-                reject(
-                    new Error(
-                        "Unable to load Razorpay SDK."
-                    )
-                );
-            };
-
-            document.body.appendChild(
-                script
-            );
+    return new Promise((resolve, reject) => {
+        if (typeof window !== "undefined" && window.Razorpay) {
+            resolve(true);
+            return;
         }
-    );
-}
 
+        const existing = document.querySelector(
+            `script[src="${RAZORPAY_SCRIPT}"]`
+        );
+
+        if (existing) {
+            existing.addEventListener("load", () => {
+                window.Razorpay
+                    ? resolve(true)
+                    : reject(new Error("Razorpay SDK unavailable."));
+            }, { once: true });
+
+            existing.addEventListener("error", () => {
+                reject(new Error("Razorpay SDK failed to load."));
+            }, { once: true });
+
+            return;
+        }
+
+        const script = document.createElement("script");
+        script.src = RAZORPAY_SCRIPT;
+        script.async = true;
+
+        script.onload = () => {
+            window.Razorpay
+                ? resolve(true)
+                : reject(new Error("Razorpay SDK unavailable."));
+        };
+
+        script.onerror = () => {
+            reject(new Error("Unable to load Razorpay SDK."));
+        };
+
+        document.body.appendChild(script);
+    });
+}
 /*
 |--------------------------------------------------------------------------
 | MAIN
@@ -817,7 +751,7 @@ export default function News() {
 
                         try {
                             setPaymentMessage(
-                                "Preparing ₹1 payment..."
+                                "Preparing â‚¹1 payment..."
                             );
 
                             await loadRazorpayScript();
@@ -840,7 +774,7 @@ export default function News() {
                                 );
 
                                 setPaymentMessage(
-                                    "✓ Today's access is already active."
+                                    "âœ“ Today's access is already active."
                                 );
 
                                 if (
@@ -1010,7 +944,7 @@ export default function News() {
                                                         );
 
                                                         setPaymentMessage(
-                                                            "✓ ₹1 payment verified."
+                                                            "âœ“ â‚¹1 payment verified."
                                                         );
 
                                                         if (
@@ -1085,7 +1019,7 @@ export default function News() {
 
                             setPaymentMessage(
                                 paymentError?.message ||
-                                    "Unable to process ₹1 payment."
+                                    "Unable to process â‚¹1 payment."
                             );
 
                             throw paymentError;
@@ -1213,7 +1147,7 @@ export default function News() {
                         setLoading(false);
 
                         setPaymentMessage(
-                            "Today's News access requires ₹1 payment."
+                            "Today's News access requires â‚¹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1354,7 +1288,7 @@ export default function News() {
                     setMcqVisible(true);
                     setMcqError(
                         language === "hi"
-                            ? "इस article का valid ID नहीं मिला।"
+                            ? "à¤‡à¤¸ article à¤•à¤¾ valid ID à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾à¥¤"
                             : "Valid article ID was not found."
                     );
                     return;
@@ -1429,8 +1363,8 @@ export default function News() {
 
                         setPaymentMessage(
                             language === "hi"
-                                ? "आज के MCQ access के लिए ₹1 payment आवश्यक है।"
-                                : "Today's MCQ access requires ₹1 payment."
+                                ? "à¤†à¤œ à¤•à¥‡ MCQ access à¤•à¥‡ à¤²à¤¿à¤ â‚¹1 payment à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤"
+                                : "Today's MCQ access requires â‚¹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1455,7 +1389,7 @@ export default function News() {
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "Session समाप्त हो गया है। कृपया फिर से login करें।"
+                                ? "Session à¤¸à¤®à¤¾à¤ªà¥à¤¤ à¤¹à¥‹ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤«à¤¿à¤° à¤¸à¥‡ login à¤•à¤°à¥‡à¤‚à¥¤"
                                 : "Session expired. Please login again."
                         );
                     }
@@ -1471,7 +1405,7 @@ export default function News() {
                             getErrorMessage(
                                 getData,
                                 language === "hi"
-                                    ? `MCQ load नहीं हो सके (${getResponse.status}).`
+                                    ? `MCQ load à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡ (${getResponse.status}).`
                                     : `MCQs could not be loaded (${getResponse.status}).`
                             )
                         );
@@ -1520,7 +1454,7 @@ export default function News() {
 
                     setPaymentMessage(
                         language === "hi"
-                            ? "MCQs generate हो रहे हैं..."
+                            ? "MCQs generate à¤¹à¥‹ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚..."
                             : "Generating MCQs..."
                     );
 
@@ -1597,8 +1531,8 @@ export default function News() {
 
                         setPaymentMessage(
                             language === "hi"
-                                ? "MCQ generate करने के लिए ₹1 payment आवश्यक है।"
-                                : "MCQ generation requires ₹1 payment."
+                                ? "MCQ generate à¤•à¤°à¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤ â‚¹1 payment à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤"
+                                : "MCQ generation requires â‚¹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1623,7 +1557,7 @@ export default function News() {
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "Session समाप्त हो गया है। कृपया फिर से login करें।"
+                                ? "Session à¤¸à¤®à¤¾à¤ªà¥à¤¤ à¤¹à¥‹ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤«à¤¿à¤° à¤¸à¥‡ login à¤•à¤°à¥‡à¤‚à¥¤"
                                 : "Session expired. Please login again."
                         );
                     }
@@ -1662,7 +1596,7 @@ export default function News() {
                             getErrorMessage(
                                 generateData,
                                 language === "hi"
-                                    ? `MCQs generate नहीं हो सके (${generateResponse.status}).`
+                                    ? `MCQs generate à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡ (${generateResponse.status}).`
                                     : `MCQs could not be generated (${generateResponse.status}).`
                             )
                         );
@@ -1736,7 +1670,7 @@ export default function News() {
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "MCQ generation complete हुआ, लेकिन backend ने कोई valid MCQ return नहीं किया।"
+                                ? "MCQ generation complete à¤¹à¥à¤†, à¤²à¥‡à¤•à¤¿à¤¨ backend à¤¨à¥‡ à¤•à¥‹à¤ˆ valid MCQ return à¤¨à¤¹à¥€à¤‚ à¤•à¤¿à¤¯à¤¾à¥¤"
                                 : "MCQ generation completed, but the backend returned no valid MCQs."
                         );
                     }
@@ -1755,7 +1689,7 @@ export default function News() {
                     setMcqError(
                         mcqFetchError?.message ||
                             (language === "hi"
-                                ? "MCQs load नहीं हो सके।"
+                                ? "MCQs load à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡à¥¤"
                                 : "MCQs could not be loaded.")
                     );
                 } finally {
@@ -1895,7 +1829,7 @@ export default function News() {
 
                 setMcqError(
                     language === "hi"
-                        ? "Article ID उपलब्ध नहीं है।"
+                        ? "Article ID à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤"
                         : "Article ID is missing."
                 );
             }
@@ -1973,112 +1907,112 @@ export default function News() {
     const t = {
         title:
             language === "hi"
-                ? "समसामयिकी"
+                ? "à¤¸à¤®à¤¸à¤¾à¤®à¤¯à¤¿à¤•à¥€"
                 : "Current Affairs",
 
         subtitle:
             language === "hi"
-                ? "UPSC एवं BPSC की तैयारी के लिए AI-क्यूरेटेड समसामयिकी"
+                ? "UPSC à¤à¤µà¤‚ BPSC à¤•à¥€ à¤¤à¥ˆà¤¯à¤¾à¤°à¥€ à¤•à¥‡ à¤²à¤¿à¤ AI-à¤•à¥à¤¯à¥‚à¤°à¥‡à¤Ÿà¥‡à¤¡ à¤¸à¤®à¤¸à¤¾à¤®à¤¯à¤¿à¤•à¥€"
                 : "AI-curated current affairs for UPSC & BPSC preparation",
 
         search:
             language === "hi"
-                ? "खोजें"
+                ? "à¤–à¥‹à¤œà¥‡à¤‚"
                 : "Search News",
 
         searchPlaceholder:
             language === "hi"
-                ? "Current Affairs खोजें..."
+                ? "Current Affairs à¤–à¥‹à¤œà¥‡à¤‚..."
                 : "Search current affairs...",
 
         exam:
             language === "hi"
-                ? "परीक्षा"
+                ? "à¤ªà¤°à¥€à¤•à¥à¤·à¤¾"
                 : "Exam",
 
         language:
             language === "hi"
-                ? "भाषा"
+                ? "à¤­à¤¾à¤·à¤¾"
                 : "Language",
 
         category:
             language === "hi"
-                ? "श्रेणी"
+                ? "à¤¶à¥à¤°à¥‡à¤£à¥€"
                 : "Category",
 
         bihar:
             language === "hi"
-                ? "केवल बिहार"
+                ? "à¤•à¥‡à¤µà¤² à¤¬à¤¿à¤¹à¤¾à¤°"
                 : "Bihar Only",
 
         reset:
             language === "hi"
-                ? "रीसेट"
+                ? "à¤°à¥€à¤¸à¥‡à¤Ÿ"
                 : "Reset",
 
         readMcq:
             language === "hi"
-                ? "पढ़ें और MCQs"
+                ? "à¤ªà¤¢à¤¼à¥‡à¤‚ à¤”à¤° MCQs"
                 : "Read & MCQs",
 
         source:
             language === "hi"
-                ? "स्रोत"
+                ? "à¤¸à¥à¤°à¥‹à¤¤"
                 : "Source",
 
         previous:
             language === "hi"
-                ? "← पिछला"
-                : "← Previous",
+                ? "â† à¤ªà¤¿à¤›à¤²à¤¾"
+                : "â† Previous",
 
         next:
             language === "hi"
-                ? "अगला →"
-                : "Next →",
+                ? "à¤…à¤—à¤²à¤¾ â†’"
+                : "Next â†’",
 
         loading:
             language === "hi"
-                ? "लोड हो रहा है..."
+                ? "à¤²à¥‹à¤¡ à¤¹à¥‹ à¤°à¤¹à¤¾ à¤¹à¥ˆ..."
                 : "Loading...",
 
         noNews:
             language === "hi"
-                ? "कोई Current Affairs नहीं मिला।"
+                ? "à¤•à¥‹à¤ˆ Current Affairs à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾à¥¤"
                 : "No current affairs found.",
 
         mcqPractice:
             language === "hi"
-                ? "MCQ अभ्यास"
+                ? "MCQ à¤…à¤­à¥à¤¯à¤¾à¤¸"
                 : "MCQ Practice",
 
         generateMcq:
             language === "hi"
-                ? "MCQs Generate / View करें"
+                ? "MCQs Generate / View à¤•à¤°à¥‡à¤‚"
                 : "Generate / View MCQs",
 
         mcqLoading:
             language === "hi"
-                ? "MCQs Generate हो रहे हैं..."
+                ? "MCQs Generate à¤¹à¥‹ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚..."
                 : "Generating MCQs...",
 
         noMcq:
             language === "hi"
-                ? "इस article के लिए अभी MCQs उपलब्ध नहीं हैं।"
+                ? "à¤‡à¤¸ article à¤•à¥‡ à¤²à¤¿à¤ à¤…à¤­à¥€ MCQs à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¤‚à¥¤"
                 : "No MCQs are currently available for this article.",
 
         explanation:
             language === "hi"
-                ? "व्याख्या:"
+                ? "à¤µà¥à¤¯à¤¾à¤–à¥à¤¯à¤¾:"
                 : "Explanation:",
 
         answer:
             language === "hi"
-                ? "सही उत्तर:"
+                ? "à¤¸à¤¹à¥€ à¤‰à¤¤à¥à¤¤à¤°:"
                 : "Answer:",
 
         openSource:
             language === "hi"
-                ? "Source खोलें"
+                ? "Source à¤–à¥‹à¤²à¥‡à¤‚"
                 : "Open Source",
     };
 
@@ -2180,7 +2114,7 @@ export default function News() {
                                     fontWeight: 700,
                                 }}
                             >
-                                ✓ Access
+                                âœ“ Access
                             </span>
                         )}
                     </div>
@@ -2485,7 +2419,7 @@ export default function News() {
                                     <option value="">
                                         {language ===
                                         "hi"
-                                            ? "सभी श्रेणियाँ"
+                                            ? "à¤¸à¤­à¥€ à¤¶à¥à¤°à¥‡à¤£à¤¿à¤¯à¤¾à¤"
                                             : "All Categories"}
                                     </option>
 
@@ -2682,8 +2616,8 @@ export default function News() {
                         }}
                     >
                         {paymentLoading
-                            ? "💳 "
-                            : "ℹ️ "}
+                            ? "ðŸ’³ "
+                            : "â„¹ï¸ "}
                         {paymentMessage}
                     </div>
                 )}
@@ -2708,7 +2642,7 @@ export default function News() {
                         <strong>
                             {language ===
                             "hi"
-                                ? "News लोड नहीं हो सके"
+                                ? "News à¤²à¥‹à¤¡ à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡"
                                 : "News could not be loaded"}
                         </strong>
 
@@ -2747,7 +2681,7 @@ export default function News() {
                         >
                             {language ===
                             "hi"
-                                ? "दोबारा प्रयास करें"
+                                ? "à¤¦à¥‹à¤¬à¤¾à¤°à¤¾ à¤ªà¥à¤°à¤¯à¤¾à¤¸ à¤•à¤°à¥‡à¤‚"
                                 : "Retry"}
                         </button>
                     </div>
@@ -3002,7 +2936,7 @@ export default function News() {
                                                             }}
                                                         >
                                                             {article.source &&
-                                                                `${article.source} • `}
+                                                                `${article.source} â€¢ `}
 
                                                             {formatDate(
                                                                 article.published_at
@@ -3262,7 +3196,7 @@ export default function News() {
                                         selectedArticle.category ||
                                         "General"
                                     }{" "}
-                                    •{" "}
+                                    â€¢{" "}
                                     {
                                         selectedArticle.exam ||
                                         exam
@@ -3304,7 +3238,7 @@ export default function News() {
                                         0,
                                 }}
                             >
-                                ×
+                                Ã—
                             </button>
                         </div>
 
@@ -3503,7 +3437,7 @@ export default function News() {
                                 >
                                     {language ===
                                     "hi"
-                                        ? "MCQ फिर से Generate करें"
+                                        ? "MCQ à¤«à¤¿à¤° à¤¸à¥‡ Generate à¤•à¤°à¥‡à¤‚"
                                         : "Retry MCQs"}
                                 </button>
                             </div>
@@ -3560,7 +3494,7 @@ export default function News() {
                                     >
                                         {language ===
                                         "hi"
-                                            ? "हिंदी"
+                                            ? "à¤¹à¤¿à¤‚à¤¦à¥€"
                                             : "English"}
                                     </span>
                                 </div>
@@ -3802,7 +3736,7 @@ export default function News() {
                                 "nowrap",
                         }}
                     >
-                        💳 ₹1 News Access
+                        ðŸ’³ â‚¹1 News Access
                         Payment
                     </div>
                 </div>
@@ -3810,3 +3744,4 @@ export default function News() {
         </div>
     );
 }
+

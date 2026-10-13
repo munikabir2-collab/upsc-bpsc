@@ -1,8 +1,8 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API_URL = import.meta.env.PROD ? "https://upsc-bpsc.onrender.com" : (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000");
 
 function Signup() {
     const navigate = useNavigate();
@@ -111,7 +111,7 @@ function Signup() {
 
             } else if (err.request) {
                 setError(
-                    "Server से connection नहीं हो रहा। Please check your internet connection and try again."
+                    "Server à¤¸à¥‡ connection à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤°à¤¹à¤¾à¥¤ Please check your internet connection and try again."
                 );
 
             } else {
@@ -311,3 +311,4 @@ const inputStyle = {
 };
 
 export default Signup;
+

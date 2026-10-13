@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
 const API_URL =
-    import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+    import.meta.env.PROD ? "https://upsc-bpsc.onrender.com" : (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000");
 
 function Login() {
     const navigate = useNavigate();
@@ -780,3 +780,4 @@ const styles = {
 };
 
 export default Login;
+

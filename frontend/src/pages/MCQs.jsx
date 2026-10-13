@@ -1,4 +1,4 @@
-
+﻿
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
@@ -10,8 +10,7 @@ import axios from "axios";
 */
 
 const API_URL =
-    import.meta.env.VITE_API_URL ||
-    "http://127.0.0.1:8000";
+    import.meta.env.PROD ? "https://upsc-bpsc.onrender.com" : (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000");
 
 const PRACTICE_PAGE_SIZE = 20;
 
@@ -85,7 +84,7 @@ const getErrorMessage = (
                     .join(", ") ||
                 (
                     isHindi
-                        ? "अमान्य अनुरोध।"
+                        ? "à¤…à¤®à¤¾à¤¨à¥à¤¯ à¤…à¤¨à¥à¤°à¥‹à¤§à¥¤"
                         : "Invalid request."
                 )
             );
@@ -105,7 +104,7 @@ const getErrorMessage = (
         if (error.response.status === 400) {
             return (
                 isHindi
-                    ? "MCQ अनुरोध पूरा नहीं हो सका।"
+                    ? "MCQ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤ªà¥‚à¤°à¤¾ à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¤¾à¥¤"
                     : "Unable to process this MCQ request."
             );
         }
@@ -113,7 +112,7 @@ const getErrorMessage = (
         if (error.response.status === 401) {
             return (
                 isHindi
-                    ? "आपका session समाप्त हो गया है। कृपया दोबारा login करें।"
+                    ? "à¤†à¤ªà¤•à¤¾ session à¤¸à¤®à¤¾à¤ªà¥à¤¤ à¤¹à¥‹ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤¦à¥‹à¤¬à¤¾à¤°à¤¾ login à¤•à¤°à¥‡à¤‚à¥¤"
                     : "Your session has expired. Please login again."
             );
         }
@@ -121,7 +120,7 @@ const getErrorMessage = (
         if (error.response.status === 403) {
             return (
                 isHindi
-                    ? "आपको इस content को access करने की अनुमति नहीं है।"
+                    ? "à¤†à¤ªà¤•à¥‹ à¤‡à¤¸ content à¤•à¥‹ access à¤•à¤°à¤¨à¥‡ à¤•à¥€ à¤…à¤¨à¥à¤®à¤¤à¤¿ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤"
                     : "You do not have permission to access this content."
             );
         }
@@ -129,7 +128,7 @@ const getErrorMessage = (
         if (error.response.status === 404) {
             return (
                 isHindi
-                    ? "MCQ service या article नहीं मिला।"
+                    ? "MCQ service à¤¯à¤¾ article à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾à¥¤"
                     : "MCQ service or article was not found."
             );
         }
@@ -137,14 +136,14 @@ const getErrorMessage = (
         if (error.response.status >= 500) {
             return (
                 isHindi
-                    ? "Server error हुआ है। कृपया कुछ देर बाद प्रयास करें।"
+                    ? "Server error à¤¹à¥à¤† à¤¹à¥ˆà¥¤ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤•à¥à¤› à¤¦à¥‡à¤° à¤¬à¤¾à¤¦ à¤ªà¥à¤°à¤¯à¤¾à¤¸ à¤•à¤°à¥‡à¤‚à¥¤"
                     : "Server error. Please try again later."
             );
         }
 
         return (
             isHindi
-                ? `Request असफल हुआ (${error.response.status})।`
+                ? `Request à¤…à¤¸à¤«à¤² à¤¹à¥à¤† (${error.response.status})à¥¤`
                 : `Request failed (${error.response.status}).`
         );
     }
@@ -152,7 +151,7 @@ const getErrorMessage = (
     if (error?.request) {
         return (
             isHindi
-                ? "Muni48 server से connection नहीं हो सका। सुनिश्चित करें कि backend चल रहा है।"
+                ? "Muni48 server à¤¸à¥‡ connection à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¤¾à¥¤ à¤¸à¥à¤¨à¤¿à¤¶à¥à¤šà¤¿à¤¤ à¤•à¤°à¥‡à¤‚ à¤•à¤¿ backend à¤šà¤² à¤°à¤¹à¤¾ à¤¹à¥ˆà¥¤"
                 : "Unable to connect to the Muni48 server. Make sure the backend is running."
         );
     }
@@ -161,7 +160,7 @@ const getErrorMessage = (
         error?.message ||
         (
             isHindi
-                ? "कुछ गलत हुआ।"
+                ? "à¤•à¥à¤› à¤—à¤²à¤¤ à¤¹à¥à¤†à¥¤"
                 : "Something went wrong."
         )
     );
@@ -491,7 +490,7 @@ const normalizeAnswerKey = (
                 ""
             )
             .replace(
-                /^उत्तर\s+/i,
+                /^à¤‰à¤¤à¥à¤¤à¤°\s+/i,
                 ""
             )
             .trim();
@@ -1204,7 +1203,7 @@ function MCQs() {
             ) {
                 setError(
                     isHindi
-                        ? "यह प्रश्न किसी news article से linked नहीं है।"
+                        ? "à¤¯à¤¹ à¤ªà¥à¤°à¤¶à¥à¤¨ à¤•à¤¿à¤¸à¥€ news article à¤¸à¥‡ linked à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤"
                         : "This question is not linked to a news article."
                 );
 
@@ -1374,7 +1373,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "MCQ लोड हो रहे हैं..."
+                                ? "MCQ à¤²à¥‹à¤¡ à¤¹à¥‹ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚..."
                                 : "Loading MCQs..."}
                         </h2>
 
@@ -1384,7 +1383,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "आपके अभ्यास प्रश्न तैयार किए जा रहे हैं।"
+                                ? "à¤†à¤ªà¤•à¥‡ à¤…à¤­à¥à¤¯à¤¾à¤¸ à¤ªà¥à¤°à¤¶à¥à¤¨ à¤¤à¥ˆà¤¯à¤¾à¤° à¤•à¤¿à¤ à¤œà¤¾ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚à¥¤"
                                 : "Preparing your practice questions."}
                         </p>
                     </div>
@@ -1423,9 +1422,9 @@ function MCQs() {
                                 styles.backLink
                             }
                         >
-                            ←{" "}
+                            â†{" "}
                             {isHindi
-                                ? "डैशबोर्ड"
+                                ? "à¤¡à¥ˆà¤¶à¤¬à¥‹à¤°à¥à¤¡"
                                 : "Dashboard"}
                         </Link>
 
@@ -1476,8 +1475,8 @@ function MCQs() {
                                 }
                             >
                                 {isHindi
-                                    ? "🇬🇧 English"
-                                    : "🇮🇳 हिंदी"}
+                                    ? "ðŸ‡¬ðŸ‡§ English"
+                                    : "ðŸ‡®ðŸ‡³ à¤¹à¤¿à¤‚à¤¦à¥€"}
                             </button>
                         </div>
                     </header>
@@ -1501,7 +1500,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "MCQ लोड नहीं हो सके"
+                                ? "MCQ à¤²à¥‹à¤¡ à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡"
                                 : "Unable to load MCQs"}
                         </h2>
 
@@ -1527,12 +1526,12 @@ function MCQs() {
                             {refreshing
                                 ? (
                                     isHindi
-                                        ? "दोबारा प्रयास..."
+                                        ? "à¤¦à¥‹à¤¬à¤¾à¤°à¤¾ à¤ªà¥à¤°à¤¯à¤¾à¤¸..."
                                         : "Retrying..."
                                 )
                                 : (
                                     isHindi
-                                        ? "दोबारा प्रयास करें"
+                                        ? "à¤¦à¥‹à¤¬à¤¾à¤°à¤¾ à¤ªà¥à¤°à¤¯à¤¾à¤¸ à¤•à¤°à¥‡à¤‚"
                                         : "Retry"
                                 )}
                         </button>
@@ -1571,9 +1570,9 @@ function MCQs() {
                                 styles.backLink
                             }
                         >
-                            ←{" "}
+                            â†{" "}
                             {isHindi
-                                ? "डैशबोर्ड"
+                                ? "à¤¡à¥ˆà¤¶à¤¬à¥‹à¤°à¥à¤¡"
                                 : "Dashboard"}
                         </Link>
 
@@ -1619,8 +1618,8 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "🇬🇧 English"
-                                : "🇮🇳 हिंदी"}
+                                ? "ðŸ‡¬ðŸ‡§ English"
+                                : "ðŸ‡®ðŸ‡³ à¤¹à¤¿à¤‚à¤¦à¥€"}
                         </button>
                     </header>
 
@@ -1634,7 +1633,7 @@ function MCQs() {
                                 styles.emptyIcon
                             }
                         >
-                            🎯
+                            ðŸŽ¯
                         </div>
 
                         <h1
@@ -1643,7 +1642,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "कोई MCQ उपलब्ध नहीं है"
+                                ? "à¤•à¥‹à¤ˆ MCQ à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆ"
                                 : "No MCQs available"}
                         </h1>
 
@@ -1653,7 +1652,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "अभी कोई अभ्यास प्रश्न उपलब्ध नहीं है।"
+                                ? "à¤…à¤­à¥€ à¤•à¥‹à¤ˆ à¤…à¤­à¥à¤¯à¤¾à¤¸ à¤ªà¥à¤°à¤¶à¥à¤¨ à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤"
                                 : "There are no practice questions available right now."}
                         </p>
 
@@ -1669,7 +1668,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "रिफ्रेश"
+                                ? "à¤°à¤¿à¤«à¥à¤°à¥‡à¤¶"
                                 : "Refresh"}
                         </button>
                     </div>
@@ -1707,9 +1706,9 @@ function MCQs() {
                             styles.backLink
                         }
                     >
-                        ←{" "}
+                        â†{" "}
                         {isHindi
-                            ? "डैशबोर्ड"
+                            ? "à¤¡à¥ˆà¤¶à¤¬à¥‹à¤°à¥à¤¡"
                             : "Dashboard"}
                     </Link>
 
@@ -1760,8 +1759,8 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "🇬🇧 English"
-                                : "🇮🇳 हिंदी"}
+                                ? "ðŸ‡¬ðŸ‡§ English"
+                                : "ðŸ‡®ðŸ‡³ à¤¹à¤¿à¤‚à¤¦à¥€"}
                         </button>
 
                         <button
@@ -1778,16 +1777,16 @@ function MCQs() {
                                 styles.refreshButton
                             }
                         >
-                            ↻{" "}
+                            â†»{" "}
                             {refreshing
                                 ? (
                                     isHindi
-                                        ? "रिफ्रेश..."
+                                        ? "à¤°à¤¿à¤«à¥à¤°à¥‡à¤¶..."
                                         : "Refreshing"
                                 )
                                 : (
                                     isHindi
-                                        ? "रिफ्रेश"
+                                        ? "à¤°à¤¿à¤«à¥à¤°à¥‡à¤¶"
                                         : "Refresh"
                                 )}
                         </button>
@@ -1808,7 +1807,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "अभ्यास"
+                                ? "à¤…à¤­à¥à¤¯à¤¾à¤¸"
                                 : "PRACTICE"}
                         </div>
 
@@ -1818,7 +1817,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "MCQ अभ्यास"
+                                ? "MCQ à¤…à¤­à¥à¤¯à¤¾à¤¸"
                                 : "MCQ Practice"}
                         </h1>
 
@@ -1828,7 +1827,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "UPSC और BPSC समसामयिकी के अपने ज्ञान का परीक्षण करें।"
+                                ? "UPSC à¤”à¤° BPSC à¤¸à¤®à¤¸à¤¾à¤®à¤¯à¤¿à¤•à¥€ à¤•à¥‡ à¤…à¤ªà¤¨à¥‡ à¤œà¥à¤žà¤¾à¤¨ à¤•à¤¾ à¤ªà¤°à¥€à¤•à¥à¤·à¤£ à¤•à¤°à¥‡à¤‚à¥¤"
                                 : "Test your UPSC & BPSC current affairs knowledge."}
                         </p>
                     </div>
@@ -1844,7 +1843,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "स्कोर"
+                                ? "à¤¸à¥à¤•à¥‹à¤°"
                                 : "Score"}
                         </span>
 
@@ -1893,7 +1892,7 @@ function MCQs() {
                                 styles.closeError
                             }
                         >
-                            ×
+                            Ã—
                         </button>
                     </div>
                 )}
@@ -1912,12 +1911,12 @@ function MCQs() {
                     >
                         <span>
                             {isHindi
-                                ? "प्रश्न"
+                                ? "à¤ªà¥à¤°à¤¶à¥à¤¨"
                                 : "Question"}{" "}
                             {currentIndex +
                                 1}{" "}
                             {isHindi
-                                ? "में से"
+                                ? "à¤®à¥‡à¤‚ à¤¸à¥‡"
                                 : "of"}{" "}
                             {
                                 questions.length
@@ -1977,7 +1976,7 @@ function MCQs() {
                         }
                     >
                         {isHindi
-                            ? "प्रश्न"
+                            ? "à¤ªà¥à¤°à¤¶à¥à¤¨"
                             : "Question"}{" "}
                         {currentIndex +
                             1}
@@ -2097,7 +2096,7 @@ function MCQs() {
                                                         styles.answerMark
                                                     }
                                                 >
-                                                    ✓
+                                                    âœ“
                                                 </span>
                                             )}
 
@@ -2108,7 +2107,7 @@ function MCQs() {
                                                         styles.answerMark
                                                     }
                                                 >
-                                                    ✕
+                                                    âœ•
                                                 </span>
                                             )}
                                     </button>
@@ -2137,7 +2136,7 @@ function MCQs() {
                             }}
                         >
                             {isHindi
-                                ? "उत्तर जमा करें"
+                                ? "à¤‰à¤¤à¥à¤¤à¤° à¤œà¤®à¤¾ à¤•à¤°à¥‡à¤‚"
                                 : "Submit Answer"}
                         </button>
                     ) : (
@@ -2153,9 +2152,9 @@ function MCQs() {
                                             styles.resultCorrect
                                         }
                                     >
-                                        ✓{" "}
+                                        âœ“{" "}
                                         {isHindi
-                                            ? "सही उत्तर!"
+                                            ? "à¤¸à¤¹à¥€ à¤‰à¤¤à¥à¤¤à¤°!"
                                             : "Correct!"}
                                     </div>
 
@@ -2165,7 +2164,7 @@ function MCQs() {
                                         }
                                     >
                                         {isHindi
-                                            ? "बहुत अच्छा।"
+                                            ? "à¤¬à¤¹à¥à¤¤ à¤…à¤šà¥à¤›à¤¾à¥¤"
                                             : "Excellent work."}
                                     </p>
                                 </>
@@ -2176,9 +2175,9 @@ function MCQs() {
                                             styles.resultWrong
                                         }
                                     >
-                                        ✕{" "}
+                                        âœ•{" "}
                                         {isHindi
-                                            ? "गलत उत्तर"
+                                            ? "à¤—à¤²à¤¤ à¤‰à¤¤à¥à¤¤à¤°"
                                             : "Incorrect"}
                                     </div>
 
@@ -2188,7 +2187,7 @@ function MCQs() {
                                         }
                                     >
                                         {isHindi
-                                            ? "सही उत्तर और व्याख्या देखें।"
+                                            ? "à¤¸à¤¹à¥€ à¤‰à¤¤à¥à¤¤à¤° à¤”à¤° à¤µà¥à¤¯à¤¾à¤–à¥à¤¯à¤¾ à¤¦à¥‡à¤–à¥‡à¤‚à¥¤"
                                             : "Review the correct answer and explanation."}
                                     </p>
                                 </>
@@ -2201,7 +2200,7 @@ function MCQs() {
                                     }
                                 >
                                     {isHindi
-                                        ? "सही उत्तर:"
+                                        ? "à¤¸à¤¹à¥€ à¤‰à¤¤à¥à¤¤à¤°:"
                                         : "Correct Answer:"}{" "}
                                     <strong>
                                         {
@@ -2231,12 +2230,12 @@ function MCQs() {
                                     {showExplanation
                                         ? (
                                             isHindi
-                                                ? "व्याख्या छिपाएँ"
+                                                ? "à¤µà¥à¤¯à¤¾à¤–à¥à¤¯à¤¾ à¤›à¤¿à¤ªà¤¾à¤à¤"
                                                 : "Hide Explanation"
                                         )
                                         : (
                                             isHindi
-                                                ? "व्याख्या देखें"
+                                                ? "à¤µà¥à¤¯à¤¾à¤–à¥à¤¯à¤¾ à¤¦à¥‡à¤–à¥‡à¤‚"
                                                 : "Show Explanation"
                                         )}
                                 </button>
@@ -2253,7 +2252,7 @@ function MCQs() {
                                     >
                                         <strong>
                                             {isHindi
-                                                ? "व्याख्या"
+                                                ? "à¤µà¥à¤¯à¤¾à¤–à¥à¤¯à¤¾"
                                                 : "Explanation"}
                                         </strong>
 
@@ -2292,9 +2291,9 @@ function MCQs() {
                                     : {}),
                             }}
                         >
-                            ←{" "}
+                            â†{" "}
                             {isHindi
-                                ? "पिछला"
+                                ? "à¤ªà¤¿à¤›à¤²à¤¾"
                                 : "Previous"}
                         </button>
 
@@ -2318,9 +2317,9 @@ function MCQs() {
                                 }}
                             >
                                 {isHindi
-                                    ? "अगला"
+                                    ? "à¤…à¤—à¤²à¤¾"
                                     : "Next"}{" "}
-                                →
+                                â†’
                             </button>
                         ) : (
                             <button
@@ -2335,7 +2334,7 @@ function MCQs() {
                                 }
                             >
                                 {isHindi
-                                    ? "नया अभ्यास"
+                                    ? "à¤¨à¤¯à¤¾ à¤…à¤­à¥à¤¯à¤¾à¤¸"
                                     : "New Practice"}
                             </button>
                         )}
@@ -2355,7 +2354,7 @@ function MCQs() {
                                 styles.generateIcon
                             }
                         >
-                            📰
+                            ðŸ“°
                         </div>
                     </div>
 
@@ -2370,7 +2369,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "समसामयिकी से MCQ बनाएँ"
+                                ? "à¤¸à¤®à¤¸à¤¾à¤®à¤¯à¤¿à¤•à¥€ à¤¸à¥‡ MCQ à¤¬à¤¨à¤¾à¤à¤"
                                 : "Generate MCQs from Current Affairs"}
                         </h3>
 
@@ -2380,7 +2379,7 @@ function MCQs() {
                             }
                         >
                             {isHindi
-                                ? "यदि यह प्रश्न किसी news article से linked है, तो उसी article से नए MCQs बनाए जा सकते हैं।"
+                                ? "à¤¯à¤¦à¤¿ à¤¯à¤¹ à¤ªà¥à¤°à¤¶à¥à¤¨ à¤•à¤¿à¤¸à¥€ news article à¤¸à¥‡ linked à¤¹à¥ˆ, à¤¤à¥‹ à¤‰à¤¸à¥€ article à¤¸à¥‡ à¤¨à¤ MCQs à¤¬à¤¨à¤¾à¤ à¤œà¤¾ à¤¸à¤•à¤¤à¥‡ à¤¹à¥ˆà¤‚à¥¤"
                                 : "If this question is linked to a news article, you can generate fresh MCQs from that article."}
                         </p>
 
@@ -2403,12 +2402,12 @@ function MCQs() {
                             {generating
                                 ? (
                                     isHindi
-                                        ? "MCQ बनाए जा रहे हैं..."
+                                        ? "MCQ à¤¬à¤¨à¤¾à¤ à¤œà¤¾ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚..."
                                         : "Generating..."
                                 )
                                 : (
                                     isHindi
-                                        ? "Article से MCQ बनाएँ"
+                                        ? "Article à¤¸à¥‡ MCQ à¤¬à¤¨à¤¾à¤à¤"
                                         : "Generate Article MCQs"
                                 )}
                         </button>
@@ -2422,9 +2421,9 @@ function MCQs() {
                         styles.footer
                     }
                 >
-                    © 2026 Muni48 ·{" "}
+                    Â© 2026 Muni48 Â·{" "}
                     {isHindi
-                        ? "UPSC एवं BPSC तैयारी प्लेटफ़ॉर्म"
+                        ? "UPSC à¤à¤µà¤‚ BPSC à¤¤à¥ˆà¤¯à¤¾à¤°à¥€ à¤ªà¥à¤²à¥‡à¤Ÿà¤«à¤¼à¥‰à¤°à¥à¤®"
                         : "UPSC & BPSC Preparation Platform"}
                 </footer>
             </div>
@@ -3253,4 +3252,5 @@ const styles = {
 };
 
 export default MCQs;
+
 

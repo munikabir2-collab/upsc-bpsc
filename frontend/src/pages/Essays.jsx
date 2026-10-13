@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 
 const API_URL =
-    import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+    import.meta.env.PROD ? "https://upsc-bpsc.onrender.com" : (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000");
 
 const getToken = () => {
     return (
@@ -93,11 +93,11 @@ function Essays() {
                 <div style={styles.topBar}>
                     <div>
                         <Link to="/dashboard" style={styles.backLink}>
-                            ← Dashboard
+                            â† Dashboard
                         </Link>
 
                         <h1 style={styles.title}>
-                            📚 Essay Practice
+                            ðŸ“š Essay Practice
                         </h1>
 
                         <p style={styles.subtitle}>
@@ -175,7 +175,7 @@ function Essays() {
 
                     {error && (
                         <div style={styles.error}>
-                            ⚠️ {error}
+                            âš ï¸ {error}
                         </div>
                     )}
 
@@ -192,7 +192,7 @@ function Essays() {
                     >
                         {loading
                             ? "Generating..."
-                            : "🚀 Generate Essay"}
+                            : "ðŸš€ Generate Essay"}
                     </button>
                 </section>
 
@@ -241,7 +241,7 @@ function Essays() {
 
                         <div style={styles.practiceBox}>
                             <strong>
-                                ✍️ Practice
+                                âœï¸ Practice
                             </strong>
 
                             <p>
@@ -257,7 +257,7 @@ function Essays() {
                 {!essay && !loading && !error && (
                     <section style={styles.emptyCard}>
                         <div style={styles.emptyIcon}>
-                            📚
+                            ðŸ“š
                         </div>
 
                         <h2>

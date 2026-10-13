@@ -1,4 +1,4 @@
-// src/pages/Dashboard.jsx
+﻿// src/pages/Dashboard.jsx
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -9,7 +9,7 @@ import axios from "axios";
 // ============================================================
 
 const API_URL =
-    import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+    import.meta.env.PROD ? "https://upsc-bpsc.onrender.com" : (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000");
 
 // ============================================================
 // API CLIENT
@@ -432,28 +432,28 @@ function Dashboard() {
 
     const stats = [
         {
-            icon: "📰",
+            icon: "ðŸ“°",
             title: "Current Affairs",
             value: newsCount,
             description: "Articles available",
             path: "/news",
         },
         {
-            icon: "🎯",
+            icon: "ðŸŽ¯",
             title: "MCQ Practice",
             value: mcqCount,
             description: "Questions available",
             path: "/mcqs",
         },
         {
-            icon: "✍️",
+            icon: "âœï¸",
             title: "Answer Writing",
             value: writingCount,
             description: "Writing questions",
             path: "/writing",
         },
         {
-            icon: "📚",
+            icon: "ðŸ“š",
             title: "Essays",
             value: essayCount,
             description: "Essay practice",
@@ -467,28 +467,28 @@ function Dashboard() {
 
     const quickPractice = [
         {
-            icon: "📰",
+            icon: "ðŸ“°",
             title: "Current Affairs",
             description:
                 "Read important UPSC & BPSC news",
             path: "/news",
         },
         {
-            icon: "📝",
+            icon: "ðŸ“",
             title: "Practice MCQs",
             description:
                 "Test your knowledge",
             path: "/mcqs",
         },
         {
-            icon: "✍️",
+            icon: "âœï¸",
             title: "Answer Writing",
             description:
                 "Practice mains answers",
             path: "/writing",
         },
         {
-            icon: "📚",
+            icon: "ðŸ“š",
             title: "Essay Practice",
             description:
                 "Improve your essay writing",
@@ -502,25 +502,25 @@ function Dashboard() {
 
     const todayPlan = [
         {
-            icon: "📰",
+            icon: "ðŸ“°",
             title: "Read Current Affairs",
             description: `${newsCount} articles available`,
             path: "/news",
         },
         {
-            icon: "📝",
+            icon: "ðŸ“",
             title: "Practice MCQs",
             description: `${mcqCount} questions available`,
             path: "/mcqs",
         },
         {
-            icon: "✍️",
+            icon: "âœï¸",
             title: "Write an Answer",
             description: `${writingCount} writing questions`,
             path: "/writing",
         },
         {
-            icon: "📚",
+            icon: "ðŸ“š",
             title: "Practice Essay",
             description: "Continue your essay preparation",
             path: "/essays",
@@ -583,7 +583,7 @@ function Dashboard() {
                             ...styles.navItemActive,
                         }}
                     >
-                        <span>🏠</span>
+                        <span>ðŸ </span>
                         <span>Dashboard</span>
                     </Link>
 
@@ -591,7 +591,7 @@ function Dashboard() {
                         to="/news"
                         style={styles.navItem}
                     >
-                        <span>📰</span>
+                        <span>ðŸ“°</span>
                         <span>Current Affairs</span>
                     </Link>
 
@@ -599,7 +599,7 @@ function Dashboard() {
                         to="/mcqs"
                         style={styles.navItem}
                     >
-                        <span>📝</span>
+                        <span>ðŸ“</span>
                         <span>MCQ Practice</span>
                     </Link>
 
@@ -607,7 +607,7 @@ function Dashboard() {
                         to="/writing"
                         style={styles.navItem}
                     >
-                        <span>✍️</span>
+                        <span>âœï¸</span>
                         <span>Answer Writing</span>
                     </Link>
 
@@ -615,7 +615,7 @@ function Dashboard() {
                         to="/essays"
                         style={styles.navItem}
                     >
-                        <span>📚</span>
+                        <span>ðŸ“š</span>
                         <span>Essay Practice</span>
                     </Link>
 
@@ -623,7 +623,7 @@ function Dashboard() {
                         to="/profile"
                         style={styles.navItem}
                     >
-                        <span>👤</span>
+                        <span>ðŸ‘¤</span>
                         <span>Profile</span>
                     </Link>
                 </nav>
@@ -632,7 +632,7 @@ function Dashboard() {
 
                 <div style={styles.proCard}>
                     <div style={styles.proIcon}>
-                        ⭐
+                        â­
                     </div>
 
                     <div style={styles.proTitle}>
@@ -648,7 +648,7 @@ function Dashboard() {
                         style={styles.proButton}
                     >
                         Upgrade
-                        <span>→</span>
+                        <span>â†’</span>
                     </Link>
                 </div>
 
@@ -659,7 +659,7 @@ function Dashboard() {
                     onClick={handleLogout}
                     style={styles.logoutButton}
                 >
-                    <span>🚪</span>
+                    <span>ðŸšª</span>
                     <span>Logout</span>
                 </button>
             </aside>
@@ -679,7 +679,7 @@ function Dashboard() {
 
                         <h1 style={styles.pageTitle}>
                             {greeting},{" "}
-                            {displayName} 👋
+                            {displayName} ðŸ‘‹
                         </h1>
 
                         <p style={styles.pageSubtitle}>
@@ -712,7 +712,7 @@ function Dashboard() {
                             onClick={handleRetry}
                             title="Refresh dashboard"
                         >
-                            ↻
+                            â†»
                         </button>
 
                         <button
@@ -720,7 +720,7 @@ function Dashboard() {
                             style={styles.iconButton}
                             title="Notifications"
                         >
-                            🔔
+                            ðŸ””
                         </button>
 
                         <div style={styles.avatar}>
@@ -779,7 +779,7 @@ function Dashboard() {
 
                                 <div style={styles.statValue}>
                                     {loading
-                                        ? "—"
+                                        ? "â€”"
                                         : item.value}
                                 </div>
 
@@ -808,7 +808,7 @@ function Dashboard() {
                         </div>
 
                         <div style={styles.rocket}>
-                            🚀
+                            ðŸš€
                         </div>
                     </div>
 
@@ -834,7 +834,7 @@ function Dashboard() {
                                 </div>
 
                                 <div style={styles.arrow}>
-                                    →
+                                    â†’
                                 </div>
                             </Link>
                         ))}
@@ -895,7 +895,7 @@ function Dashboard() {
                                 </div>
 
                                 <div style={styles.planArrow}>
-                                    →
+                                    â†’
                                 </div>
                             </Link>
                         ))}
@@ -922,7 +922,7 @@ function Dashboard() {
                             to="/profile"
                             style={styles.profileLink}
                         >
-                            View Profile →
+                            View Profile â†’
                         </Link>
                     </div>
 
@@ -939,7 +939,7 @@ function Dashboard() {
                                     </span>
 
                                     <span style={styles.overviewArrow}>
-                                        →
+                                        â†’
                                     </span>
                                 </div>
 
@@ -949,7 +949,7 @@ function Dashboard() {
 
                                 <div style={styles.overviewValue}>
                                     {loading
-                                        ? "—"
+                                        ? "â€”"
                                         : item.value}
                                 </div>
 
@@ -966,7 +966,7 @@ function Dashboard() {
                 ================================================= */}
 
                 <footer style={styles.footer}>
-                    © 2026 Muni48 · UPSC & BPSC Preparation Platform
+                    Â© 2026 Muni48 Â· UPSC & BPSC Preparation Platform
                 </footer>
             </main>
         </div>
