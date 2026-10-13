@@ -633,7 +633,7 @@ def get_questions(
         db.query(WritingQuestion)
         .filter(
             WritingQuestion.exam == exam,
-            WritingQuestion.is_active == 1,
+            WritingQuestion.is_active.is_(True),
         )
     )
 
@@ -1856,7 +1856,7 @@ def create_writing_payment_order(
     current_user=Depends(get_current_user),
 ):
     """
-    Create ₹39 Razorpay order.
+    Create Razorpay order for 39 rupees.
     """
 
     user = _require_authenticated_user(
@@ -1991,8 +1991,7 @@ def writing_subscription_status(
 
     It is intentionally accessible to authenticated users
     so the frontend can determine whether to show:
-
-        Buy ₹39 Plan
+    Show payment option when subscription is inactive.
 
     or
 
