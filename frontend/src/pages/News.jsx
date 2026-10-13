@@ -631,91 +631,195 @@ export default function News() {
             [getHeaders]
         );
 
-    /*
-    |--------------------------------------------------------------------------
-    | CREATE PAYMENT ORDER
-    |--------------------------------------------------------------------------
-    */
+  
+/*
+|--------------------------------------------------------------------------
+| CREATE PAYMENT ORDER
+|--------------------------------------------------------------------------
+*/
 
-    const createPaymentOrder =
-        useCallback(async () => {
-            const {
-                response,
-                data,
-            } =
-                await apiRequest(
-                    "/news/payment/create-order",
-                    {
-                        method: "POST",
-                    }
-                );
+const verifyPayment = useCallback(
+    async (paymentData = {}) => {
+        const {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature,
+        } = paymentData;
+
+        if (
+            !razorpay_order_id ||
+            !razorpay_payment_id ||
+            !razorpay_signature
+        ) {
+            throw new Error(
+                "Payment verification details are incomplete."
+            );
+        }
+
+        const { response, data } = await apiRequest(
+            "/news/payment/verify",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    razorpay_order_id,
+                    razorpay_payment_id,
+                    razorpay_signature,
+                }),
+            }
+        );
+
+        if (response.status === 401) {
+            throw new Error(
+                "Session expired. Please login again."
+            );
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                getErrorMessage(
+                    data,
+                    `Payment verification failed (${response.status}).`
+                )
+            );
+        }
+
+        const result = data?.data ?? data?.result ?? data;
+
+        if (result?.success === false) {
+            throw new Error(
+                result?.message || "Payment verification failed."
+            );
+        }
+
+        return result;
+    },
+    [apiRequest]
+);
+const createPaymentOrder = useCallback(
+    async () => {
+        const {
+            response,
+            data,
+        } = await apiRequest(
+            "/news/payment/create-order",
+            {
+                method: "POST",
+            }
+        );
+
+        // Session expired
+        if (response.status === 401) {
+            throw new Error(
+                "Session expired. Please login again."
+            );
+        }
+
+        // Backend returned an error
+        if (!response.ok) {
+            throw new Error(
+                getErrorMessage(
+                    data,
+                    `Unable to create payment order (${response.status}).`
+                )
+            );
+        }
+
+        // Normalize direct or nested response
+        let orderData = data;
+
+        for (let i = 0; i < 3; i++) {
+            if (
+                orderData &&
+                typeof orderData === "object" &&
+                !Array.isArray(orderData) &&
+                (
+                    orderData.order_id ||
+                    orderData.orderId ||
+                    orderData.id
+                )
+            ) {
+                break;
+            }
 
             if (
-                response.status === 401
+                !orderData ||
+                typeof orderData !== "object" ||
+                Array.isArray(orderData)
             ) {
-                throw new Error(
-                    "Session expired. Please login again."
-                );
+                break;
             }
 
-            if (!response.ok) {
-                throw new Error(
-                    getErrorMessage(
-                        data,
-                        `Unable to create payment order (${response.status}).`
-                    )
-                );
+            const nested =
+                orderData.data ??
+                orderData.order ??
+                orderData.result;
+
+            if (
+                !nested ||
+                typeof nested !== "object" ||
+                Array.isArray(nested)
+            ) {
+                break;
             }
 
-            return data;
-        }, [apiRequest]);
+            orderData = nested;
+        }
 
-    /*
-    |--------------------------------------------------------------------------
-    | VERIFY PAYMENT
-    |--------------------------------------------------------------------------
-    */
+        // Validate response
+        if (
+            !orderData ||
+            typeof orderData !== "object" ||
+            Array.isArray(orderData)
+        ) {
+            throw new Error(
+                "Invalid payment order response from server."
+            );
+        }
 
-    const verifyPayment =
-        useCallback(
-            async ({
-                razorpay_order_id,
-                razorpay_payment_id,
-                razorpay_signature,
-            }) => {
-                const {
-                    response,
-                    data,
-                } =
-                    await apiRequest(
-                        "/news/payment/verify",
-                        {
-                            method: "POST",
+        // Validate Razorpay order ID
+        const orderId =
+            orderData.order_id ??
+            orderData.orderId ??
+            orderData.id;
 
-                            body:
-                                JSON.stringify(
-                                    {
-                                        razorpay_order_id,
-                                        razorpay_payment_id,
-                                        razorpay_signature,
-                                    }
-                                ),
-                        }
-                    );
+        if (
+            typeof orderId !== "string" ||
+            !orderId.trim()
+        ) {
+            throw new Error(
+                "Razorpay Order ID missing from server."
+            );
+        }
 
-                if (!response.ok) {
-                    throw new Error(
-                        getErrorMessage(
-                            data,
-                            "Payment verification failed."
-                        )
-                    );
-                }
+        // Validate Razorpay Key ID
+        const keyId =
+            orderData.key_id ??
+            orderData.keyId;
 
-                return data;
-            },
-            [apiRequest]
-        );
+        if (
+            typeof keyId !== "string" ||
+            !keyId.trim()
+        ) {
+            throw new Error(
+                "Razorpay Key ID missing from server."
+            );
+        }
+
+        // Return normalized order data
+        return {
+            ...orderData,
+            order_id: orderId,
+            key_id: keyId,
+            amount: Number(
+                orderData.amount ?? 100
+            ),
+            currency:
+                orderData.currency ?? "INR",
+        };
+    },
+    [apiRequest]
+);
+
 
     /*
     |--------------------------------------------------------------------------
