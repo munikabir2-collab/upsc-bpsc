@@ -1,9 +1,9 @@
-// src/pages/Dashboard.jsx
+﻿// src/pages/Dashboard.jsx
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
-
+import api from "../api";
 // ============================================================
 // CONFIG
 // ============================================================
@@ -14,15 +14,6 @@ const API_URL =
 // ============================================================
 // API CLIENT
 // ============================================================
-
-const api = axios.create({
-    baseURL: API_URL,
-    timeout: 15000,
-    headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-    },
-});
 
 // ============================================================
 // AUTH HELPERS

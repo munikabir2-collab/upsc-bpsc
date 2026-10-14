@@ -1,0 +1,62 @@
+﻿18: | - Ã¢â€šÂ¹1 Razorpay daily access
+21: | - 402 => Razorpay
+31: const RAZORPAY_SCRIPT =
+32: "https://checkout.razorpay.com/v1/checkout.js";
+175: function isPaymentRequired(
+366: | LOAD RAZORPAY
+370: function loadRazorpayScript() {
+372: if (typeof window !== "undefined" && window.Razorpay) {
+388: if (window.Razorpay) {
+391: finish(reject, new Error("Razorpay SDK loaded but unavailable."));
+398: new Error("Unable to load Razorpay SDK. Check internet, browser extensions, or content blockers.")
+405: new Error("Razorpay SDK loading timed out after 15 seconds.")
+410: `script[src="${RAZORPAY_SCRIPT}"]`
+417: if (window.Razorpay) {
+424: script.src = RAZORPAY_SCRIPT;
+553: const getHeaders =
+602: ...getHeaders(),
+651: [getHeaders]
+664: razorpay_order_id,
+665: razorpay_payment_id,
+666: razorpay_signature,
+670: !razorpay_order_id ||
+671: !razorpay_payment_id ||
+672: !razorpay_signature
+680: "/news/payment/verify",
+684: razorpay_order_id,
+685: razorpay_payment_id,
+686: razorpay_signature,
+735: "/news/payment/create-order",
+821: // Validate Razorpay order ID
+832: "Razorpay Order ID missing from server."
+836: // Validate Razorpay Key ID
+846: "Razorpay Key ID missing from server."
+868: | RAZORPAY PAYMENT
+872: const openRazorpayPayment =
+903: await loadRazorpayScript();
+957: "Razorpay Key ID missing from server."
+963: "Razorpay Order ID missing from server."
+1063: razorpay_order_id:
+1065: ?.razorpay_order_id,
+1067: razorpay_payment_id:
+1069: ?.razorpay_payment_id,
+1071: razorpay_signature:
+1073: ?.razorpay_signature,
+1120: const razorpay =
+1121: new window.Razorpay(
+1125: razorpay.on(
+1155: razorpay.open();
+1210: allowPayment = true,
+1287: allowPayment &&
+1288: isPaymentRequired(
+1299: await openRazorpayPayment(
+1305: allowPayment: false,
+1412: openRazorpayPayment,
+1426: allowPayment = true
+1508: allowPayment &&
+1509: isPaymentRequired(
+1524: await openRazorpayPayment(
+1676: allowPayment &&
+1677: isPaymentRequired(
+1692: await openRazorpayPayment(
+1859: openRazorpayPayment,

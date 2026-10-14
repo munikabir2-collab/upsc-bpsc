@@ -1,0 +1,118 @@
+----- 575-625 -----
+    |--------------------------------------------------------------------------
+    */
+
+    const apiRequest =
+        useCallback(
+            async (
+                endpoint,
+                options = {}
+            ) => {
+                const url =
+                    endpoint.startsWith(
+                        "http"
+                    )
+                        ? endpoint
+                        : `${API_URL}${endpoint}`;
+
+                let response;
+
+                try {
+                    response =
+                        await fetch(
+                            url,
+                            {
+                                ...options,
+
+                                headers: {
+                                    ...getHeaders(),
+                                    ...(options.headers ||
+                                        {}),
+                                },
+                            }
+                        );
+                } catch (
+                    networkError
+                ) {
+                    throw new Error(
+                        `Backend connection failed. ${networkError?.message || ""}`
+                    );
+                }
+
+                const contentType =
+                    response.headers.get(
+                        "content-type"
+                    ) || "";
+
+                let data = null;
+
+                if (
+                    contentType.includes(
+                        "application/json"
+----- 1255-1290 -----
+                    );
+                }
+
+                if (biharOnly) {
+                    params.set(
+                        "bihar_only",
+                        "true"
+                    );
+                }
+
+                try {
+                    const {
+                        response,
+                        data,
+                    } =
+                        await apiRequest(
+                            `/news/search?${params.toString()}`
+                        );
+
+                    if (
+                        requestId !==
+                        newsRequestRef.current
+                    ) {
+                        return;
+                    }
+
+                    /*
+                     * 402
+                     */
+
+                    if (
+                        allowPayment &&
+                        isPaymentRequired(
+                            response.status,
+                            data
+----- 1620-1650 -----
+
+                        count:
+                            MCQ_COUNT,
+
+                        difficulty:
+                            "Medium",
+
+                        question_type:
+                            "single_correct",
+                    };
+
+                    console.log(
+                        "MCQ POST URL:",
+                        `${API_URL}/news/${safeArticleId}/mcqs/generate`
+                    );
+
+                    console.log(
+                        "MCQ POST BODY:",
+                        generateBody
+                    );
+
+                    const {
+                        response:
+                            generateResponse,
+                        data:
+                            generateData,
+                    } =
+                        await apiRequest(
+                            `/news/${safeArticleId}/mcqs/generate`,
+                            {

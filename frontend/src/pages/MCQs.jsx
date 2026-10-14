@@ -1,7 +1,7 @@
-﻿
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import axios from "axios";
+import http from "../api";
 
 /*
 |--------------------------------------------------------------------------
@@ -958,35 +958,14 @@ function MCQs() {
                             language
                         );
 
-                    const response =
-                        await axios.get(
-                            `${API_URL}/news/mcqs/practice`,
-                            {
-                                timeout: 20000,
-
-                                headers: {
-                                    Accept:
-                                        "application/json",
-
-                                    ...(token
-                                        ? {
-                                              Authorization:
-                                                  `Bearer ${token}`,
-                                          }
-                                        : {}),
-                                },
-
-                                params: {
-                                    page: 1,
-
-                                    page_size:
-                                        PRACTICE_PAGE_SIZE,
-
-                                    language:
-                                        currentLanguage,
-                                },
-                            }
-                        );
+                    const response = await http.get("/news/mcqs/practice", {
+                        timeout: 20000,
+                        params: {
+                            page: 1,
+                            page_size: PRACTICE_PAGE_SIZE,
+                            language: currentLanguage,
+                        },
+                    });
 
                     console.log(
                         "Practice MCQ API:",
@@ -1223,32 +1202,12 @@ function MCQs() {
                         language
                     );
 
-                const response =
-                    await axios.post(
-                        `${API_URL}/news/${articleId}/mcqs/generate`,
+                const response = await http.post(
+                        `/news/${articleId}/mcqs/generate`,
                         {},
                         {
                             timeout: 60000,
-
-                            headers: {
-                                Accept:
-                                    "application/json",
-
-                                "Content-Type":
-                                    "application/json",
-
-                                ...(token
-                                    ? {
-                                          Authorization:
-                                              `Bearer ${token}`,
-                                      }
-                                    : {}),
-                            },
-
-                            params: {
-                                language:
-                                    currentLanguage,
-                            },
+                            params: { language: currentLanguage },
                         }
                     );
 

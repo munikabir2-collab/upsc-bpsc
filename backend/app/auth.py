@@ -5,18 +5,13 @@ import os
 from dotenv import load_dotenv
 from passlib.context import CryptContext
 from jose import jwt
-
+from app.config import SECRET_KEY, JWT_ALGORITHM
 load_dotenv()
 
 
 # ============================================================
 # JWT CONFIG
 # ============================================================
-
-SECRET_KEY = os.getenv(
-    "SECRET_KEY",
-    "change-this-secret-key",
-)
 
 JWT_ALGORITHM = os.getenv(
     "JWT_ALGORITHM",
