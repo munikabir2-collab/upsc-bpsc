@@ -15,7 +15,7 @@
 | - Category
 | - Bihar only
 | - News search
-| - Ã¢â€šÂ¹1 Razorpay daily access
+| - ₹1 Razorpay daily access
 | - Existing MCQ GET
 | - MCQ generation POST JSON
 | - 402 => Razorpay
@@ -43,7 +43,7 @@ const LANGUAGES = [
     },
     {
         value: "hi",
-        label: "Ã Â¤Â¹Ã Â¤Â¿Ã Â¤â€šÃ Â¤Â¦Ã Â¥â‚¬",
+        label: "हिंदी",
     },
 ];
 
@@ -862,340 +862,223 @@ const createPaymentOrder = useCallback(
     [apiRequest]
 );
 
+/*
+|--------------------------------------------------------------------------
+| RAZORPAY PAYMENT (web checkout + Android native checkout)
+|--------------------------------------------------------------------------
+*/
 
-    /*
-    |--------------------------------------------------------------------------
-    | RAZORPAY PAYMENT
-    |--------------------------------------------------------------------------
-    */
+const openRazorpayPayment = useCallback(
+  async (afterPayment) => {
+    if (paymentPromiseRef.current) {
+      return paymentPromiseRef.current;
+    }
 
-    const openRazorpayPayment =
-        useCallback(
-            async (afterPayment) => {
-                if (
-                    paymentPromiseRef.current
-                ) {
-                    return paymentPromiseRef.current;
-                }
+    if (Date.now() < paymentCooldownUntil.current) {
+      setPaymentMessage("Please wait a few seconds before retrying payment.");
+      return;
+    }
 
-                if (
-                    Date.now() <
-                    paymentCooldownUntil.current
-                ) {
-                    setPaymentMessage(
-                        "Please wait a few seconds before retrying payment."
-                    );
+    const promise = (async () => {
+      setPaymentLoading(true);
 
-                    return;
-                }
+      try {
+        setPaymentMessage("Preparing ₹1 payment...");
 
-                const promise =
-                    (async () => {
-                        setPaymentLoading(
-                            true
-                        );
+        await loadRazorpayScript();
 
-                        try {
-                            setPaymentMessage(
-                                "Preparing Ã¢â€šÂ¹1 payment..."
-                            );
+        const order = await createPaymentOrder();
 
-                            await loadRazorpayScript();
+        /*
+         * ALREADY ACTIVE
+         */
+        if (order?.has_access === true || order?.access_active === true) {
+          setHasAccess(true);
+          setPaymentMessage("✓ Today's access is already active.");
 
-                            const order =
-                                await createPaymentOrder();
+          if (typeof afterPayment === "function") {
+            await afterPayment();
+          }
 
-                            /*
-                             * ALREADY ACTIVE
-                             */
+          return;
+        }
 
-                            if (
-                                order?.has_access ===
-                                    true ||
-                                order?.access_active ===
-                                    true
-                            ) {
-                                setHasAccess(
-                                    true
-                                );
+        const keyId = order?.key_id ?? order?.keyId;
+        const orderId = order?.order_id ?? order?.orderId ?? order?.id;
+        const amount = Number(order?.amount ?? 100);
+        const currency = order?.currency ?? "INR";
 
-                                setPaymentMessage(
-                                    "Ã¢Å“â€œ Today's access is already active."
-                                );
+        if (!keyId) {
+          throw new Error("Razorpay Key ID missing from server.");
+        }
 
-                                if (
-                                    typeof afterPayment ===
-                                    "function"
-                                ) {
-                                    await afterPayment();
-                                }
+        if (!orderId) {
+          throw new Error("Razorpay Order ID missing from server.");
+        }
 
-                                return;
-                            }
+        await new Promise((resolve, reject) => {
+          let finished = false;
 
-                            const keyId =
-                                order?.key_id ??
-                                order?.keyId;
+          const finish = (callback) => {
+            if (finished) {
+              return;
+            }
 
-                            const orderId =
-                                order?.order_id ??
-                                order?.orderId ??
-                                order?.id;
+            finished = true;
+            callback();
+          };
 
-                            const amount =
-                                Number(
-                                    order?.amount ??
-                                        100
-                                );
+          const currentUser = getUser();
 
-                            const currency =
-                                order?.currency ??
-                                "INR";
+          const options = {
+            key: keyId,
+            amount,
+            currency,
+            name: "Muni48",
+            description: "Daily Current Affairs Access",
+            order_id: orderId,
 
-                            if (!keyId) {
-                                throw new Error(
-                                    "Razorpay Key ID missing from server."
-                                );
-                            }
-
-                            if (!orderId) {
-                                throw new Error(
-                                    "Razorpay Order ID missing from server."
-                                );
-                            }
-
-                            await new Promise(
-                                (
-                                    resolve,
-                                    reject
-                                ) => {
-                                    let finished =
-                                        false;
-
-                                    const finish =
-                                        (
-                                            callback
-                                        ) => {
-                                            if (
-                                                finished
-                                            ) {
-                                                return;
-                                            }
-
-                                            finished =
-                                                true;
-
-                                            callback();
-                                        };
-
-                                    const currentUser =
-                                        getUser();
-
-                                    const options =
-                                        {
-                                            key:
-                                                keyId,
-
-                                            amount,
-
-                                            currency,
-
-                                            name:
-                                                "Muni48",
-
-                                            description:
-                                                "Daily Current Affairs Access",
-
-                                            order_id:
-                                                orderId,
-
-                                            prefill:
-                                                {
-                                                    name:
-                                                        currentUser?.name ||
-                                                        "",
-
-                                                    email:
-                                                        currentUser?.email ||
-                                                        "",
-                                                },
-
-                                            notes:
-                                                {
-                                                    feature:
-                                                        "daily_current_affairs",
-                                                },
-
-                                            theme:
-                                                {
-                                                    color:
-                                                        "#2563eb",
-                                                },
-
-                                            modal:
-                                                {
-                                                    ondismiss:
-                                                        () => {
-                                                            finish(
-                                                                () => {
-                                                                    setPaymentMessage(
-                                                                        "Payment cancelled."
-                                                                    );
-
-                                                                    resolve();
-                                                                }
-                                                            );
-                                                        },
-                                                },
-
-                                            handler:
-                                                async (
-                                                    paymentResponse
-                                                ) => {
-                                                    try {
-                                                        setPaymentMessage(
-                                                            "Payment received. Verifying..."
-                                                        );
-
-                                                        const verified =
-                                                            await verifyPayment(
-                                                                {
-                                                                    razorpay_order_id:
-                                                                        paymentResponse
-                                                                            ?.razorpay_order_id,
-
-                                                                    razorpay_payment_id:
-                                                                        paymentResponse
-                                                                            ?.razorpay_payment_id,
-
-                                                                    razorpay_signature:
-                                                                        paymentResponse
-                                                                            ?.razorpay_signature,
-                                                                }
-                                                            );
-
-                                                        if (
-                                                            verified?.has_access !==
-                                                                true &&
-                                                            verified?.access_active !==
-                                                                true
-                                                        ) {
-                                                            throw new Error(
-                                                                "Payment verified but access is not active."
-                                                            );
-                                                        }
-
-                                                        setHasAccess(
-                                                            true
-                                                        );
-
-                                                        setPaymentMessage(
-                                                            "Ã¢Å“â€œ Ã¢â€šÂ¹1 payment verified."
-                                                        );
-
-                                                        if (
-                                                            typeof afterPayment ===
-                                                            "function"
-                                                        ) {
-                                                            await afterPayment();
-                                                        }
-
-                                                        finish(
-                                                            () =>
-                                                                resolve()
-                                                        );
-                                                    } catch (
-                                                        verificationError
-                                                    ) {
-                                                        finish(
-                                                            () =>
-                                                                reject(
-                                                                    verificationError
-                                                                )
-                                                        );
-                                                    }
-                                                },
-                                        };
-
-                                    const razorpay =
-                                        new window.Razorpay(
-                                            options
-                                        );
-
-                                    razorpay.on(
-                                        "payment.failed",
-                                        (
-                                            paymentError
-                                        ) => {
-                                            const description =
-                                                paymentError
-                                                    ?.error
-                                                    ?.description ||
-                                                "Payment failed.";
-
-                                            setPaymentMessage(
-                                                description
-                                            );
-
-                                            paymentCooldownUntil.current =
-                                                Date.now() +
-                                                10000;
-
-                                            finish(
-                                                () =>
-                                                    reject(
-                                                        new Error(
-                                                            description
-                                                        )
-                                                    )
-                                            );
-                                        }
-                                    );
-
-                                    razorpay.open();
-                                }
-                            );
-                        } catch (
-                            paymentError
-                        ) {
-                            console.error(
-                                "Payment error:",
-                                paymentError
-                            );
-
-                            setPaymentMessage(
-                                paymentError?.message ||
-                                    "Unable to process Ã¢â€šÂ¹1 payment."
-                            );
-
-                            throw paymentError;
-                        } finally {
-                            setPaymentLoading(
-                                false
-                            );
-
-                            paymentCooldownUntil.current =
-                                Date.now() +
-                                3000;
-                        }
-                    })();
-
-                paymentPromiseRef.current =
-                    promise;
-
-                try {
-                    return await promise;
-                } finally {
-                    paymentPromiseRef.current =
-                        null;
-                }
+            prefill: {
+              name: currentUser?.name || "",
+              email: currentUser?.email || "",
             },
-            [
-                createPaymentOrder,
-                verifyPayment,
-            ]
+
+            notes: {
+              feature: "daily_current_affairs",
+            },
+
+            theme: {
+              color: "#2563eb",
+            },
+
+            modal: {
+              ondismiss: () => {
+                finish(() => {
+                  setPaymentMessage("Payment cancelled.");
+                  resolve();
+                });
+              },
+            },
+
+            handler: async (paymentResponse) => {
+              try {
+                setPaymentMessage("Payment received. Verifying...");
+
+                const verified = await verifyPayment({
+                  razorpay_order_id: paymentResponse?.razorpay_order_id,
+                  razorpay_payment_id: paymentResponse?.razorpay_payment_id,
+                  razorpay_signature: paymentResponse?.razorpay_signature,
+                });
+
+                if (
+                  verified?.has_access !== true &&
+                  verified?.access_active !== true
+                ) {
+                  throw new Error("Payment verified but access is not active.");
+                }
+
+                setHasAccess(true);
+                setPaymentMessage("✓ ₹1 payment verified.");
+
+                if (typeof afterPayment === "function") {
+                  await afterPayment();
+                }
+
+                finish(() => resolve());
+              } catch (verificationError) {
+                finish(() => reject(verificationError));
+              }
+            },
+          };
+
+          /*
+           * ANDROID APP: native Razorpay checkout
+           * (window.NativePay is provided by the Flutter app only)
+           */
+          if (window.NativePay) {
+            window.onNativePayment = async (res) => {
+              window.onNativePayment = null;
+
+              // Success: reuse the existing handler (verifies + unlocks access)
+              if (res?.status === "success") {
+                await options.handler(res);
+                return;
+              }
+
+              // User cancelled in the native screen
+              if (res?.code === 0) {
+                finish(() => {
+                  setPaymentMessage("Payment cancelled.");
+                  resolve();
+                });
+                return;
+              }
+
+              // Payment failed
+              const description = res?.message || "Payment failed.";
+              setPaymentMessage(description);
+              paymentCooldownUntil.current = Date.now() + 10000;
+              finish(() => reject(new Error(description)));
+            };
+
+            window.NativePay.postMessage(
+              JSON.stringify({
+                key: keyId,
+                order_id: orderId,
+                amount,
+                currency,
+                description: "Daily Current Affairs Access",
+                contact: currentUser?.phone || "",
+                email: currentUser?.email || "",
+              })
+            );
+
+            return;
+          }
+
+          /*
+           * NORMAL BROWSER: existing web checkout
+           */
+          const razorpay = new window.Razorpay(options);
+
+          razorpay.on("payment.failed", (paymentError) => {
+            const description =
+              paymentError?.error?.description || "Payment failed.";
+
+            setPaymentMessage(description);
+
+            paymentCooldownUntil.current = Date.now() + 10000;
+
+            finish(() => reject(new Error(description)));
+          });
+
+          razorpay.open();
+        });
+      } catch (paymentError) {
+        console.error("Payment error:", paymentError);
+
+        setPaymentMessage(
+          paymentError?.message || "Unable to process ₹1 payment."
         );
 
+        throw paymentError;
+      } finally {
+        setPaymentLoading(false);
+
+        paymentCooldownUntil.current = Date.now() + 3000;
+      }
+    })();
+
+    paymentPromiseRef.current = promise;
+
+    try {
+      return await promise;
+    } finally {
+      paymentPromiseRef.current = null;
+    }
+  },
+  [createPaymentOrder, verifyPayment]
+);
     /*
     |--------------------------------------------------------------------------
     | FETCH NEWS
@@ -1293,7 +1176,7 @@ const createPaymentOrder = useCallback(
                         setLoading(false);
 
                         setPaymentMessage(
-                            "Today's News access requires Ã¢â€šÂ¹1 payment."
+                            "Today's News access requires ₹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1442,7 +1325,7 @@ const createPaymentOrder = useCallback(
                     setMcqVisible(true);
                     setMcqError(
                         language === "hi"
-                            ? "Ã Â¤â€¡Ã Â¤Â¸ article Ã Â¤â€¢Ã Â¤Â¾ valid ID Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â®Ã Â¤Â¿Ã Â¤Â²Ã Â¤Â¾Ã Â¥Â¤"
+                            ? "इस article का valid ID नहीं मिला।"
                             : "Valid article ID was not found."
                     );
                     return;
@@ -1517,8 +1400,8 @@ const createPaymentOrder = useCallback(
 
                         setPaymentMessage(
                             language === "hi"
-                                ? "Ã Â¤â€ Ã Â¤Å“ Ã Â¤â€¢Ã Â¥â€¡ MCQ access Ã Â¤â€¢Ã Â¥â€¡ Ã Â¤Â²Ã Â¤Â¿Ã Â¤Â Ã¢â€šÂ¹1 payment Ã Â¤â€ Ã Â¤ÂµÃ Â¤Â¶Ã Â¥ÂÃ Â¤Â¯Ã Â¤â€¢ Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤"
-                                : "Today's MCQ access requires Ã¢â€šÂ¹1 payment."
+                                ? "आज के MCQ access के लिए ₹1 payment आवश्यक है।"
+                                : "Today's MCQ access requires ₹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1543,7 +1426,7 @@ const createPaymentOrder = useCallback(
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "Session Ã Â¤Â¸Ã Â¤Â®Ã Â¤Â¾Ã Â¤ÂªÃ Â¥ÂÃ Â¤Â¤ Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤â€”Ã Â¤Â¯Ã Â¤Â¾ Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤ Ã Â¤â€¢Ã Â¥Æ’Ã Â¤ÂªÃ Â¤Â¯Ã Â¤Â¾ Ã Â¤Â«Ã Â¤Â¿Ã Â¤Â° Ã Â¤Â¸Ã Â¥â€¡ login Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€šÃ Â¥Â¤"
+                                ? "Session समाप्त हो गया है। कृपया फिर से login करें।"
                                 : "Session expired. Please login again."
                         );
                     }
@@ -1559,7 +1442,7 @@ const createPaymentOrder = useCallback(
                             getErrorMessage(
                                 getData,
                                 language === "hi"
-                                    ? `MCQ load Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â¸Ã Â¤â€¢Ã Â¥â€¡ (${getResponse.status}).`
+                                    ? `MCQ load नहीं हो सके (${getResponse.status}).`
                                     : `MCQs could not be loaded (${getResponse.status}).`
                             )
                         );
@@ -1608,7 +1491,7 @@ const createPaymentOrder = useCallback(
 
                     setPaymentMessage(
                         language === "hi"
-                            ? "MCQs generate Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â°Ã Â¤Â¹Ã Â¥â€¡ Ã Â¤Â¹Ã Â¥Ë†Ã Â¤â€š..."
+                            ? "MCQs generate हो रहे हैं..."
                             : "Generating MCQs..."
                     );
 
@@ -1685,8 +1568,8 @@ const createPaymentOrder = useCallback(
 
                         setPaymentMessage(
                             language === "hi"
-                                ? "MCQ generate Ã Â¤â€¢Ã Â¤Â°Ã Â¤Â¨Ã Â¥â€¡ Ã Â¤â€¢Ã Â¥â€¡ Ã Â¤Â²Ã Â¤Â¿Ã Â¤Â Ã¢â€šÂ¹1 payment Ã Â¤â€ Ã Â¤ÂµÃ Â¤Â¶Ã Â¥ÂÃ Â¤Â¯Ã Â¤â€¢ Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤"
-                                : "MCQ generation requires Ã¢â€šÂ¹1 payment."
+                                ? "MCQ generate करने के लिए ₹1 payment आवश्यक है।"
+                                : "MCQ generation requires ₹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1711,7 +1594,7 @@ const createPaymentOrder = useCallback(
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "Session Ã Â¤Â¸Ã Â¤Â®Ã Â¤Â¾Ã Â¤ÂªÃ Â¥ÂÃ Â¤Â¤ Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤â€”Ã Â¤Â¯Ã Â¤Â¾ Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤ Ã Â¤â€¢Ã Â¥Æ’Ã Â¤ÂªÃ Â¤Â¯Ã Â¤Â¾ Ã Â¤Â«Ã Â¤Â¿Ã Â¤Â° Ã Â¤Â¸Ã Â¥â€¡ login Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€šÃ Â¥Â¤"
+                                ? "Session समाप्त हो गया है। कृपया फिर से login करें।"
                                 : "Session expired. Please login again."
                         );
                     }
@@ -1750,7 +1633,7 @@ const createPaymentOrder = useCallback(
                             getErrorMessage(
                                 generateData,
                                 language === "hi"
-                                    ? `MCQs generate Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â¸Ã Â¤â€¢Ã Â¥â€¡ (${generateResponse.status}).`
+                                    ? `MCQs generate नहीं हो सके (${generateResponse.status}).`
                                     : `MCQs could not be generated (${generateResponse.status}).`
                             )
                         );
@@ -1824,7 +1707,7 @@ const createPaymentOrder = useCallback(
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "MCQ generation complete Ã Â¤Â¹Ã Â¥ÂÃ Â¤â€ , Ã Â¤Â²Ã Â¥â€¡Ã Â¤â€¢Ã Â¤Â¿Ã Â¤Â¨ backend Ã Â¤Â¨Ã Â¥â€¡ Ã Â¤â€¢Ã Â¥â€¹Ã Â¤Ë† valid MCQ return Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤â€¢Ã Â¤Â¿Ã Â¤Â¯Ã Â¤Â¾Ã Â¥Â¤"
+                                ? "MCQ generation complete हुआ, लेकिन backend ने कोई valid MCQ return नहीं किया।"
                                 : "MCQ generation completed, but the backend returned no valid MCQs."
                         );
                     }
@@ -1843,7 +1726,7 @@ const createPaymentOrder = useCallback(
                     setMcqError(
                         mcqFetchError?.message ||
                             (language === "hi"
-                                ? "MCQs load Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â¸Ã Â¤â€¢Ã Â¥â€¡Ã Â¥Â¤"
+                                ? "MCQs load नहीं हो सके।"
                                 : "MCQs could not be loaded.")
                     );
                 } finally {
@@ -1983,7 +1866,7 @@ const createPaymentOrder = useCallback(
 
                 setMcqError(
                     language === "hi"
-                        ? "Article ID Ã Â¤â€°Ã Â¤ÂªÃ Â¤Â²Ã Â¤Â¬Ã Â¥ÂÃ Â¤Â§ Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤"
+                        ? "Article ID उपलब्ध नहीं है।"
                         : "Article ID is missing."
                 );
             }
@@ -2061,112 +1944,112 @@ const createPaymentOrder = useCallback(
     const t = {
         title:
             language === "hi"
-                ? "Ã Â¤Â¸Ã Â¤Â®Ã Â¤Â¸Ã Â¤Â¾Ã Â¤Â®Ã Â¤Â¯Ã Â¤Â¿Ã Â¤â€¢Ã Â¥â‚¬"
+                ? "समसामयिकी"
                 : "Current Affairs",
 
         subtitle:
             language === "hi"
-                ? "UPSC Ã Â¤ÂÃ Â¤ÂµÃ Â¤â€š BPSC Ã Â¤â€¢Ã Â¥â‚¬ Ã Â¤Â¤Ã Â¥Ë†Ã Â¤Â¯Ã Â¤Â¾Ã Â¤Â°Ã Â¥â‚¬ Ã Â¤â€¢Ã Â¥â€¡ Ã Â¤Â²Ã Â¤Â¿Ã Â¤Â AI-Ã Â¤â€¢Ã Â¥ÂÃ Â¤Â¯Ã Â¥â€šÃ Â¤Â°Ã Â¥â€¡Ã Â¤Å¸Ã Â¥â€¡Ã Â¤Â¡ Ã Â¤Â¸Ã Â¤Â®Ã Â¤Â¸Ã Â¤Â¾Ã Â¤Â®Ã Â¤Â¯Ã Â¤Â¿Ã Â¤â€¢Ã Â¥â‚¬"
+                ? "UPSC एवं BPSC की तैयारी के लिए AI-क्यूरेटेड समसामयिकी"
                 : "AI-curated current affairs for UPSC & BPSC preparation",
 
         search:
             language === "hi"
-                ? "Ã Â¤â€“Ã Â¥â€¹Ã Â¤Å“Ã Â¥â€¡Ã Â¤â€š"
+                ? "खोजें"
                 : "Search News",
 
         searchPlaceholder:
             language === "hi"
-                ? "Current Affairs Ã Â¤â€“Ã Â¥â€¹Ã Â¤Å“Ã Â¥â€¡Ã Â¤â€š..."
+                ? "Current Affairs खोजें..."
                 : "Search current affairs...",
 
         exam:
             language === "hi"
-                ? "Ã Â¤ÂªÃ Â¤Â°Ã Â¥â‚¬Ã Â¤â€¢Ã Â¥ÂÃ Â¤Â·Ã Â¤Â¾"
+                ? "परीक्षा"
                 : "Exam",
 
         language:
             language === "hi"
-                ? "Ã Â¤Â­Ã Â¤Â¾Ã Â¤Â·Ã Â¤Â¾"
+                ? "भाषा"
                 : "Language",
 
         category:
             language === "hi"
-                ? "Ã Â¤Â¶Ã Â¥ÂÃ Â¤Â°Ã Â¥â€¡Ã Â¤Â£Ã Â¥â‚¬"
+                ? "श्रेणी"
                 : "Category",
 
         bihar:
             language === "hi"
-                ? "Ã Â¤â€¢Ã Â¥â€¡Ã Â¤ÂµÃ Â¤Â² Ã Â¤Â¬Ã Â¤Â¿Ã Â¤Â¹Ã Â¤Â¾Ã Â¤Â°"
+                ? "केवल बिहार"
                 : "Bihar Only",
 
         reset:
             language === "hi"
-                ? "Ã Â¤Â°Ã Â¥â‚¬Ã Â¤Â¸Ã Â¥â€¡Ã Â¤Å¸"
+                ? "रीसेट"
                 : "Reset",
 
         readMcq:
             language === "hi"
-                ? "Ã Â¤ÂªÃ Â¤Â¢Ã Â¤Â¼Ã Â¥â€¡Ã Â¤â€š Ã Â¤â€Ã Â¤Â° MCQs"
+                ? "पढ़ें और MCQs"
                 : "Read & MCQs",
 
         source:
             language === "hi"
-                ? "Ã Â¤Â¸Ã Â¥ÂÃ Â¤Â°Ã Â¥â€¹Ã Â¤Â¤"
+                ? "स्रोत"
                 : "Source",
 
         previous:
             language === "hi"
-                ? "Ã¢â€ Â Ã Â¤ÂªÃ Â¤Â¿Ã Â¤â€ºÃ Â¤Â²Ã Â¤Â¾"
-                : "Ã¢â€ Â Previous",
+                ? "← पिछला"
+                : "← Previous",
 
         next:
             language === "hi"
-                ? "Ã Â¤â€¦Ã Â¤â€”Ã Â¤Â²Ã Â¤Â¾ Ã¢â€ â€™"
-                : "Next Ã¢â€ â€™",
+                ? "अगला →"
+                : "Next →",
 
         loading:
             language === "hi"
-                ? "Ã Â¤Â²Ã Â¥â€¹Ã Â¤Â¡ Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â°Ã Â¤Â¹Ã Â¤Â¾ Ã Â¤Â¹Ã Â¥Ë†..."
+                ? "लोड हो रहा है..."
                 : "Loading...",
 
         noNews:
             language === "hi"
-                ? "Ã Â¤â€¢Ã Â¥â€¹Ã Â¤Ë† Current Affairs Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â®Ã Â¤Â¿Ã Â¤Â²Ã Â¤Â¾Ã Â¥Â¤"
+                ? "कोई Current Affairs नहीं मिला।"
                 : "No current affairs found.",
 
         mcqPractice:
             language === "hi"
-                ? "MCQ Ã Â¤â€¦Ã Â¤Â­Ã Â¥ÂÃ Â¤Â¯Ã Â¤Â¾Ã Â¤Â¸"
+                ? "MCQ अभ्यास"
                 : "MCQ Practice",
 
         generateMcq:
             language === "hi"
-                ? "MCQs Generate / View Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€š"
+                ? "MCQs Generate / View करें"
                 : "Generate / View MCQs",
 
         mcqLoading:
             language === "hi"
-                ? "MCQs Generate Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â°Ã Â¤Â¹Ã Â¥â€¡ Ã Â¤Â¹Ã Â¥Ë†Ã Â¤â€š..."
+                ? "MCQs Generate हो रहे हैं..."
                 : "Generating MCQs...",
 
         noMcq:
             language === "hi"
-                ? "Ã Â¤â€¡Ã Â¤Â¸ article Ã Â¤â€¢Ã Â¥â€¡ Ã Â¤Â²Ã Â¤Â¿Ã Â¤Â Ã Â¤â€¦Ã Â¤Â­Ã Â¥â‚¬ MCQs Ã Â¤â€°Ã Â¤ÂªÃ Â¤Â²Ã Â¤Â¬Ã Â¥ÂÃ Â¤Â§ Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥Ë†Ã Â¤â€šÃ Â¥Â¤"
+                ? "इस article के लिए अभी MCQs उपलब्ध नहीं हैं।"
                 : "No MCQs are currently available for this article.",
 
         explanation:
             language === "hi"
-                ? "Ã Â¤ÂµÃ Â¥ÂÃ Â¤Â¯Ã Â¤Â¾Ã Â¤â€“Ã Â¥ÂÃ Â¤Â¯Ã Â¤Â¾:"
+                ? "व्याख्या:"
                 : "Explanation:",
 
         answer:
             language === "hi"
-                ? "Ã Â¤Â¸Ã Â¤Â¹Ã Â¥â‚¬ Ã Â¤â€°Ã Â¤Â¤Ã Â¥ÂÃ Â¤Â¤Ã Â¤Â°:"
+                ? "सही उत्तर:"
                 : "Answer:",
 
         openSource:
             language === "hi"
-                ? "Source Ã Â¤â€“Ã Â¥â€¹Ã Â¤Â²Ã Â¥â€¡Ã Â¤â€š"
+                ? "Source खोलें"
                 : "Open Source",
     };
 
@@ -2268,7 +2151,7 @@ const createPaymentOrder = useCallback(
                                     fontWeight: 700,
                                 }}
                             >
-                                Ã¢Å“â€œ Access
+                                ✓ Access
                             </span>
                         )}
                     </div>
@@ -2573,7 +2456,7 @@ const createPaymentOrder = useCallback(
                                     <option value="">
                                         {language ===
                                         "hi"
-                                            ? "Ã Â¤Â¸Ã Â¤Â­Ã Â¥â‚¬ Ã Â¤Â¶Ã Â¥ÂÃ Â¤Â°Ã Â¥â€¡Ã Â¤Â£Ã Â¤Â¿Ã Â¤Â¯Ã Â¤Â¾Ã Â¤Â"
+                                            ? "सभी श्रेणियाँ"
                                             : "All Categories"}
                                     </option>
 
@@ -2770,8 +2653,8 @@ const createPaymentOrder = useCallback(
                         }}
                     >
                         {paymentLoading
-                            ? "Ã°Å¸â€™Â³ "
-                            : "Ã¢â€žÂ¹Ã¯Â¸Â "}
+                            ? "💳 "
+                            : "ℹ️ "}
                         {paymentMessage}
                     </div>
                 )}
@@ -2796,7 +2679,7 @@ const createPaymentOrder = useCallback(
                         <strong>
                             {language ===
                             "hi"
-                                ? "News Ã Â¤Â²Ã Â¥â€¹Ã Â¤Â¡ Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â¸Ã Â¤â€¢Ã Â¥â€¡"
+                                ? "News लोड नहीं हो सके"
                                 : "News could not be loaded"}
                         </strong>
 
@@ -2835,7 +2718,7 @@ const createPaymentOrder = useCallback(
                         >
                             {language ===
                             "hi"
-                                ? "Ã Â¤Â¦Ã Â¥â€¹Ã Â¤Â¬Ã Â¤Â¾Ã Â¤Â°Ã Â¤Â¾ Ã Â¤ÂªÃ Â¥ÂÃ Â¤Â°Ã Â¤Â¯Ã Â¤Â¾Ã Â¤Â¸ Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€š"
+                                ? "दोबारा प्रयास करें"
                                 : "Retry"}
                         </button>
                     </div>
@@ -3090,7 +2973,7 @@ const createPaymentOrder = useCallback(
                                                             }}
                                                         >
                                                             {article.source &&
-                                                                `${article.source} Ã¢â‚¬Â¢ `}
+                                                                `${article.source} • `}
 
                                                             {formatDate(
                                                                 article.published_at
@@ -3350,7 +3233,7 @@ const createPaymentOrder = useCallback(
                                         selectedArticle.category ||
                                         "General"
                                     }{" "}
-                                    Ã¢â‚¬Â¢{" "}
+                                    •{" "}
                                     {
                                         selectedArticle.exam ||
                                         exam
@@ -3392,7 +3275,7 @@ const createPaymentOrder = useCallback(
                                         0,
                                 }}
                             >
-                                Ãƒâ€”
+                                ×
                             </button>
                         </div>
 
@@ -3591,7 +3474,7 @@ const createPaymentOrder = useCallback(
                                 >
                                     {language ===
                                     "hi"
-                                        ? "MCQ Ã Â¤Â«Ã Â¤Â¿Ã Â¤Â° Ã Â¤Â¸Ã Â¥â€¡ Generate Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€š"
+                                        ? "MCQ फिर से Generate करें"
                                         : "Retry MCQs"}
                                 </button>
                             </div>
@@ -3648,7 +3531,7 @@ const createPaymentOrder = useCallback(
                                     >
                                         {language ===
                                         "hi"
-                                            ? "Ã Â¤Â¹Ã Â¤Â¿Ã Â¤â€šÃ Â¤Â¦Ã Â¥â‚¬"
+                                            ? "हिंदी"
                                             : "English"}
                                     </span>
                                 </div>
@@ -3890,7 +3773,7 @@ const createPaymentOrder = useCallback(
                                 "nowrap",
                         }}
                     >
-                        Ã°Å¸â€™Â³ Ã¢â€šÂ¹1 News Access
+                        💳 ₹1 News Access
                         Payment
                     </div>
                 </div>

@@ -15,7 +15,7 @@
 | - Category
 | - Bihar only
 | - News search
-| - â‚¹1 Razorpay daily access
+| - Ã¢â€šÂ¹1 Razorpay daily access
 | - Existing MCQ GET
 | - MCQ generation POST JSON
 | - 402 => Razorpay
@@ -24,9 +24,9 @@
 |--------------------------------------------------------------------------
 */
 
-const API_URL =
-    import.meta.env.VITE_API_URL ||
-    "http://127.0.0.1:8000";
+const API_URL = import.meta.env.PROD
+    ? "https://upsc-bpsc.onrender.com"
+    : (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000");
 
 const RAZORPAY_SCRIPT =
     "https://checkout.razorpay.com/v1/checkout.js";
@@ -43,7 +43,7 @@ const LANGUAGES = [
     },
     {
         value: "hi",
-        label: "à¤¹à¤¿à¤‚à¤¦à¥€",
+        label: "Ã Â¤Â¹Ã Â¤Â¿Ã Â¤â€šÃ Â¤Â¦Ã Â¥â‚¬",
     },
 ];
 
@@ -368,110 +368,66 @@ function normalizeMcqs(data) {
 */
 
 function loadRazorpayScript() {
-    return new Promise(
-        (resolve, reject) => {
-            if (
-                typeof window !==
-                    "undefined" &&
-                window.Razorpay
-            ) {
-                resolve(true);
-                return;
-            }
-
-            const existing =
-                document.querySelector(
-                    `script[src="${RAZORPAY_SCRIPT}"]`
-                );
-
-            if (existing) {
-                const onLoad = () => {
-                    cleanup();
-
-                    if (
-                        window.Razorpay
-                    ) {
-                        resolve(true);
-                    } else {
-                        reject(
-                            new Error(
-                                "Razorpay SDK loaded but unavailable."
-                            )
-                        );
-                    }
-                };
-
-                const onError = () => {
-                    cleanup();
-
-                    reject(
-                        new Error(
-                            "Razorpay SDK failed to load."
-                        )
-                    );
-                };
-
-                const cleanup = () => {
-                    existing.removeEventListener(
-                        "load",
-                        onLoad
-                    );
-
-                    existing.removeEventListener(
-                        "error",
-                        onError
-                    );
-                };
-
-                existing.addEventListener(
-                    "load",
-                    onLoad
-                );
-
-                existing.addEventListener(
-                    "error",
-                    onError
-                );
-
-                return;
-            }
-
-            const script =
-                document.createElement(
-                    "script"
-                );
-
-            script.src =
-                RAZORPAY_SCRIPT;
-
-            script.async = true;
-
-            script.onload = () => {
-                if (
-                    window.Razorpay
-                ) {
-                    resolve(true);
-                } else {
-                    reject(
-                        new Error(
-                            "Razorpay SDK unavailable."
-                        )
-                    );
-                }
-            };
-
-            script.onerror = () => {
-                reject(
-                    new Error(
-                        "Unable to load Razorpay SDK."
-                    )
-                );
-            };
-
-            document.body.appendChild(
-                document.body.appendChild(script);
+    return new Promise((resolve, reject) => {
+        if (typeof window !== "undefined" && window.Razorpay) {
+            resolve(true);
+            return;
         }
-    );
+
+        let settled = false;
+        let timeoutId;
+
+        const finish = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(timeoutId);
+            callback(value);
+        };
+
+        const onLoad = () => {
+            if (window.Razorpay) {
+                finish(resolve, true);
+            } else {
+                finish(reject, new Error("Razorpay SDK loaded but unavailable."));
+            }
+        };
+
+        const onError = () => {
+            finish(
+                reject,
+                new Error("Unable to load Razorpay SDK. Check internet, browser extensions, or content blockers.")
+            );
+        };
+
+        timeoutId = window.setTimeout(() => {
+            finish(
+                reject,
+                new Error("Razorpay SDK loading timed out after 15 seconds.")
+            );
+        }, 15000);
+
+        let script = document.querySelector(
+            `script[src="${RAZORPAY_SCRIPT}"]`
+        );
+
+        if (script) {
+            script.addEventListener("load", onLoad, { once: true });
+            script.addEventListener("error", onError, { once: true });
+
+            if (window.Razorpay) {
+                finish(resolve, true);
+            }
+            return;
+        }
+
+        script = document.createElement("script");
+        script.src = RAZORPAY_SCRIPT;
+        script.async = true;
+        script.addEventListener("load", onLoad, { once: true });
+        script.addEventListener("error", onError, { once: true });
+
+        document.body.appendChild(script);
+    });
 }
 
 /*
@@ -479,7 +435,6 @@ function loadRazorpayScript() {
 | MAIN
 |--------------------------------------------------------------------------
 */
-
 export default function News() {
     /*
     |--------------------------------------------------------------------------
@@ -696,91 +651,217 @@ export default function News() {
             [getHeaders]
         );
 
-    /*
-    |--------------------------------------------------------------------------
-    | CREATE PAYMENT ORDER
-    |--------------------------------------------------------------------------
-    */
+  
+/*
+|--------------------------------------------------------------------------
+| CREATE PAYMENT ORDER
+|--------------------------------------------------------------------------
+*/
 
-    const createPaymentOrder =
-        useCallback(async () => {
-            const {
-                response,
-                data,
-            } =
-                await apiRequest(
-                    "/news/payment/create-order",
-                    {
-                        method: "POST",
+const verifyPayment = useCallback(
+    async (paymentData = {}) => {
+        const {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature,
+        } = paymentData;
+
+        if (
+            !razorpay_order_id ||
+            !razorpay_payment_id ||
+            !razorpay_signature
+        ) {
+            throw new Error(
+                "Payment verification details are incomplete."
+            );
+        }
+
+        const { response, data } = await apiRequest(
+            "/news/payment/verify",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    razorpay_order_id,
+                    razorpay_payment_id,
+                    razorpay_signature,
+                }),
+            }
+        );
+
+        if (response.status === 401) {
+                        localStorage.removeItem("token");
+                        localStorage.removeItem("user");
+                        localStorage.removeItem("isAuthenticated");
+                        sessionStorage.removeItem("token");
+                        sessionStorage.removeItem("user");
+                        sessionStorage.removeItem("isAuthenticated");
+
+                        setLoading(false);
+
+                        if (window.location.pathname !== "/login") {
+                            window.location.href = "/login";
+                        }
+
+                        throw new Error("Login session expired. Payment verification could not be completed. Do not pay again until the payment status is checked.");
                     }
-                );
+
+        if (!response.ok) {
+            throw new Error(
+                getErrorMessage(
+                    data,
+                    `Payment verification failed (${response.status}).`
+                )
+            );
+        }
+
+        const result = data?.data ?? data?.result ?? data;
+
+        if (result?.success === false) {
+            throw new Error(
+                result?.message || "Payment verification failed."
+            );
+        }
+
+        return result;
+    },
+    [apiRequest]
+);
+const createPaymentOrder = useCallback(
+    async () => {
+        const {
+            response,
+            data,
+        } = await apiRequest(
+            "/news/payment/create-order",
+            {
+                method: "POST",
+            }
+        );
+
+        // Session expired
+        if (response.status === 401) {
+                        localStorage.removeItem("token");
+                        localStorage.removeItem("user");
+                        localStorage.removeItem("isAuthenticated");
+                        sessionStorage.removeItem("token");
+                        sessionStorage.removeItem("user");
+                        sessionStorage.removeItem("isAuthenticated");
+
+                        setLoading(false);
+
+                        if (window.location.pathname !== "/login") {
+                            window.location.href = "/login";
+                        }
+
+                        return;
+                    }
+
+        // Backend returned an error
+        if (!response.ok) {
+            throw new Error(
+                getErrorMessage(
+                    data,
+                    `Unable to create payment order (${response.status}).`
+                )
+            );
+        }
+
+        // Normalize direct or nested response
+        let orderData = data;
+
+        for (let i = 0; i < 3; i++) {
+            if (
+                orderData &&
+                typeof orderData === "object" &&
+                !Array.isArray(orderData) &&
+                (
+                    orderData.order_id ||
+                    orderData.orderId ||
+                    orderData.id
+                )
+            ) {
+                break;
+            }
 
             if (
-                response.status === 401
+                !orderData ||
+                typeof orderData !== "object" ||
+                Array.isArray(orderData)
             ) {
-                throw new Error(
-                    "Session expired. Please login again."
-                );
+                break;
             }
 
-            if (!response.ok) {
-                throw new Error(
-                    getErrorMessage(
-                        data,
-                        `Unable to create payment order (${response.status}).`
-                    )
-                );
+            const nested =
+                orderData.data ??
+                orderData.order ??
+                orderData.result;
+
+            if (
+                !nested ||
+                typeof nested !== "object" ||
+                Array.isArray(nested)
+            ) {
+                break;
             }
 
-            return data;
-        }, [apiRequest]);
+            orderData = nested;
+        }
 
-    /*
-    |--------------------------------------------------------------------------
-    | VERIFY PAYMENT
-    |--------------------------------------------------------------------------
-    */
+        // Validate response
+        if (
+            !orderData ||
+            typeof orderData !== "object" ||
+            Array.isArray(orderData)
+        ) {
+            throw new Error(
+                "Invalid payment order response from server."
+            );
+        }
 
-    const verifyPayment =
-        useCallback(
-            async ({
-                razorpay_order_id,
-                razorpay_payment_id,
-                razorpay_signature,
-            }) => {
-                const {
-                    response,
-                    data,
-                } =
-                    await apiRequest(
-                        "/news/payment/verify",
-                        {
-                            method: "POST",
+        // Validate Razorpay order ID
+        const orderId =
+            orderData.order_id ??
+            orderData.orderId ??
+            orderData.id;
 
-                            body:
-                                JSON.stringify(
-                                    {
-                                        razorpay_order_id,
-                                        razorpay_payment_id,
-                                        razorpay_signature,
-                                    }
-                                ),
-                        }
-                    );
+        if (
+            typeof orderId !== "string" ||
+            !orderId.trim()
+        ) {
+            throw new Error(
+                "Razorpay Order ID missing from server."
+            );
+        }
 
-                if (!response.ok) {
-                    throw new Error(
-                        getErrorMessage(
-                            data,
-                            "Payment verification failed."
-                        )
-                    );
-                }
+        // Validate Razorpay Key ID
+        const keyId =
+            orderData.key_id ??
+            orderData.keyId;
 
-                return data;
-            },
-            [apiRequest]
-        );
+        if (
+            typeof keyId !== "string" ||
+            !keyId.trim()
+        ) {
+            throw new Error(
+                "Razorpay Key ID missing from server."
+            );
+        }
+
+        // Return normalized order data
+        return {
+            ...orderData,
+            order_id: orderId,
+            key_id: keyId,
+            amount: Number(
+                orderData.amount ?? 100
+            ),
+            currency:
+                orderData.currency ?? "INR",
+        };
+    },
+    [apiRequest]
+);
+
 
     /*
     |--------------------------------------------------------------------------
@@ -816,7 +897,7 @@ export default function News() {
 
                         try {
                             setPaymentMessage(
-                                "Preparing â‚¹1 payment..."
+                                "Preparing Ã¢â€šÂ¹1 payment..."
                             );
 
                             await loadRazorpayScript();
@@ -839,7 +920,7 @@ export default function News() {
                                 );
 
                                 setPaymentMessage(
-                                    "âœ“ Today's access is already active."
+                                    "Ã¢Å“â€œ Today's access is already active."
                                 );
 
                                 if (
@@ -1009,7 +1090,7 @@ export default function News() {
                                                         );
 
                                                         setPaymentMessage(
-                                                            "âœ“ â‚¹1 payment verified."
+                                                            "Ã¢Å“â€œ Ã¢â€šÂ¹1 payment verified."
                                                         );
 
                                                         if (
@@ -1084,7 +1165,7 @@ export default function News() {
 
                             setPaymentMessage(
                                 paymentError?.message ||
-                                    "Unable to process â‚¹1 payment."
+                                    "Unable to process Ã¢â€šÂ¹1 payment."
                             );
 
                             throw paymentError;
@@ -1212,7 +1293,7 @@ export default function News() {
                         setLoading(false);
 
                         setPaymentMessage(
-                            "Today's News access requires â‚¹1 payment."
+                            "Today's News access requires Ã¢â€šÂ¹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1234,13 +1315,21 @@ export default function News() {
                      * 401
                      */
 
-                    if (
-                        response.status ===
-                        401
-                    ) {
-                        throw new Error(
-                            "Session expired. Please login again."
-                        );
+                    if (response.status === 401) {
+                        localStorage.removeItem("token");
+                        localStorage.removeItem("user");
+                        localStorage.removeItem("isAuthenticated");
+                        sessionStorage.removeItem("token");
+                        sessionStorage.removeItem("user");
+                        sessionStorage.removeItem("isAuthenticated");
+
+                        setLoading(false);
+
+                        if (window.location.pathname !== "/login") {
+                            window.location.href = "/login";
+                        }
+
+                        return;
                     }
 
                     /*
@@ -1353,7 +1442,7 @@ export default function News() {
                     setMcqVisible(true);
                     setMcqError(
                         language === "hi"
-                            ? "à¤‡à¤¸ article à¤•à¤¾ valid ID à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾à¥¤"
+                            ? "Ã Â¤â€¡Ã Â¤Â¸ article Ã Â¤â€¢Ã Â¤Â¾ valid ID Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â®Ã Â¤Â¿Ã Â¤Â²Ã Â¤Â¾Ã Â¥Â¤"
                             : "Valid article ID was not found."
                     );
                     return;
@@ -1428,8 +1517,8 @@ export default function News() {
 
                         setPaymentMessage(
                             language === "hi"
-                                ? "à¤†à¤œ à¤•à¥‡ MCQ access à¤•à¥‡ à¤²à¤¿à¤ â‚¹1 payment à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤"
-                                : "Today's MCQ access requires â‚¹1 payment."
+                                ? "Ã Â¤â€ Ã Â¤Å“ Ã Â¤â€¢Ã Â¥â€¡ MCQ access Ã Â¤â€¢Ã Â¥â€¡ Ã Â¤Â²Ã Â¤Â¿Ã Â¤Â Ã¢â€šÂ¹1 payment Ã Â¤â€ Ã Â¤ÂµÃ Â¤Â¶Ã Â¥ÂÃ Â¤Â¯Ã Â¤â€¢ Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤"
+                                : "Today's MCQ access requires Ã¢â€šÂ¹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1454,7 +1543,7 @@ export default function News() {
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "Session à¤¸à¤®à¤¾à¤ªà¥à¤¤ à¤¹à¥‹ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤«à¤¿à¤° à¤¸à¥‡ login à¤•à¤°à¥‡à¤‚à¥¤"
+                                ? "Session Ã Â¤Â¸Ã Â¤Â®Ã Â¤Â¾Ã Â¤ÂªÃ Â¥ÂÃ Â¤Â¤ Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤â€”Ã Â¤Â¯Ã Â¤Â¾ Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤ Ã Â¤â€¢Ã Â¥Æ’Ã Â¤ÂªÃ Â¤Â¯Ã Â¤Â¾ Ã Â¤Â«Ã Â¤Â¿Ã Â¤Â° Ã Â¤Â¸Ã Â¥â€¡ login Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€šÃ Â¥Â¤"
                                 : "Session expired. Please login again."
                         );
                     }
@@ -1470,7 +1559,7 @@ export default function News() {
                             getErrorMessage(
                                 getData,
                                 language === "hi"
-                                    ? `MCQ load à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡ (${getResponse.status}).`
+                                    ? `MCQ load Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â¸Ã Â¤â€¢Ã Â¥â€¡ (${getResponse.status}).`
                                     : `MCQs could not be loaded (${getResponse.status}).`
                             )
                         );
@@ -1519,7 +1608,7 @@ export default function News() {
 
                     setPaymentMessage(
                         language === "hi"
-                            ? "MCQs generate à¤¹à¥‹ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚..."
+                            ? "MCQs generate Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â°Ã Â¤Â¹Ã Â¥â€¡ Ã Â¤Â¹Ã Â¥Ë†Ã Â¤â€š..."
                             : "Generating MCQs..."
                     );
 
@@ -1596,8 +1685,8 @@ export default function News() {
 
                         setPaymentMessage(
                             language === "hi"
-                                ? "MCQ generate à¤•à¤°à¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤ â‚¹1 payment à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤"
-                                : "MCQ generation requires â‚¹1 payment."
+                                ? "MCQ generate Ã Â¤â€¢Ã Â¤Â°Ã Â¤Â¨Ã Â¥â€¡ Ã Â¤â€¢Ã Â¥â€¡ Ã Â¤Â²Ã Â¤Â¿Ã Â¤Â Ã¢â€šÂ¹1 payment Ã Â¤â€ Ã Â¤ÂµÃ Â¤Â¶Ã Â¥ÂÃ Â¤Â¯Ã Â¤â€¢ Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤"
+                                : "MCQ generation requires Ã¢â€šÂ¹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1622,7 +1711,7 @@ export default function News() {
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "Session à¤¸à¤®à¤¾à¤ªà¥à¤¤ à¤¹à¥‹ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤«à¤¿à¤° à¤¸à¥‡ login à¤•à¤°à¥‡à¤‚à¥¤"
+                                ? "Session Ã Â¤Â¸Ã Â¤Â®Ã Â¤Â¾Ã Â¤ÂªÃ Â¥ÂÃ Â¤Â¤ Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤â€”Ã Â¤Â¯Ã Â¤Â¾ Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤ Ã Â¤â€¢Ã Â¥Æ’Ã Â¤ÂªÃ Â¤Â¯Ã Â¤Â¾ Ã Â¤Â«Ã Â¤Â¿Ã Â¤Â° Ã Â¤Â¸Ã Â¥â€¡ login Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€šÃ Â¥Â¤"
                                 : "Session expired. Please login again."
                         );
                     }
@@ -1661,7 +1750,7 @@ export default function News() {
                             getErrorMessage(
                                 generateData,
                                 language === "hi"
-                                    ? `MCQs generate à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡ (${generateResponse.status}).`
+                                    ? `MCQs generate Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â¸Ã Â¤â€¢Ã Â¥â€¡ (${generateResponse.status}).`
                                     : `MCQs could not be generated (${generateResponse.status}).`
                             )
                         );
@@ -1735,7 +1824,7 @@ export default function News() {
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "MCQ generation complete à¤¹à¥à¤†, à¤²à¥‡à¤•à¤¿à¤¨ backend à¤¨à¥‡ à¤•à¥‹à¤ˆ valid MCQ return à¤¨à¤¹à¥€à¤‚ à¤•à¤¿à¤¯à¤¾à¥¤"
+                                ? "MCQ generation complete Ã Â¤Â¹Ã Â¥ÂÃ Â¤â€ , Ã Â¤Â²Ã Â¥â€¡Ã Â¤â€¢Ã Â¤Â¿Ã Â¤Â¨ backend Ã Â¤Â¨Ã Â¥â€¡ Ã Â¤â€¢Ã Â¥â€¹Ã Â¤Ë† valid MCQ return Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤â€¢Ã Â¤Â¿Ã Â¤Â¯Ã Â¤Â¾Ã Â¥Â¤"
                                 : "MCQ generation completed, but the backend returned no valid MCQs."
                         );
                     }
@@ -1754,7 +1843,7 @@ export default function News() {
                     setMcqError(
                         mcqFetchError?.message ||
                             (language === "hi"
-                                ? "MCQs load à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡à¥¤"
+                                ? "MCQs load Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â¸Ã Â¤â€¢Ã Â¥â€¡Ã Â¥Â¤"
                                 : "MCQs could not be loaded.")
                     );
                 } finally {
@@ -1894,7 +1983,7 @@ export default function News() {
 
                 setMcqError(
                     language === "hi"
-                        ? "Article ID à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤"
+                        ? "Article ID Ã Â¤â€°Ã Â¤ÂªÃ Â¤Â²Ã Â¤Â¬Ã Â¥ÂÃ Â¤Â§ Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥Ë†Ã Â¥Â¤"
                         : "Article ID is missing."
                 );
             }
@@ -1972,112 +2061,112 @@ export default function News() {
     const t = {
         title:
             language === "hi"
-                ? "à¤¸à¤®à¤¸à¤¾à¤®à¤¯à¤¿à¤•à¥€"
+                ? "Ã Â¤Â¸Ã Â¤Â®Ã Â¤Â¸Ã Â¤Â¾Ã Â¤Â®Ã Â¤Â¯Ã Â¤Â¿Ã Â¤â€¢Ã Â¥â‚¬"
                 : "Current Affairs",
 
         subtitle:
             language === "hi"
-                ? "UPSC à¤à¤µà¤‚ BPSC à¤•à¥€ à¤¤à¥ˆà¤¯à¤¾à¤°à¥€ à¤•à¥‡ à¤²à¤¿à¤ AI-à¤•à¥à¤¯à¥‚à¤°à¥‡à¤Ÿà¥‡à¤¡ à¤¸à¤®à¤¸à¤¾à¤®à¤¯à¤¿à¤•à¥€"
+                ? "UPSC Ã Â¤ÂÃ Â¤ÂµÃ Â¤â€š BPSC Ã Â¤â€¢Ã Â¥â‚¬ Ã Â¤Â¤Ã Â¥Ë†Ã Â¤Â¯Ã Â¤Â¾Ã Â¤Â°Ã Â¥â‚¬ Ã Â¤â€¢Ã Â¥â€¡ Ã Â¤Â²Ã Â¤Â¿Ã Â¤Â AI-Ã Â¤â€¢Ã Â¥ÂÃ Â¤Â¯Ã Â¥â€šÃ Â¤Â°Ã Â¥â€¡Ã Â¤Å¸Ã Â¥â€¡Ã Â¤Â¡ Ã Â¤Â¸Ã Â¤Â®Ã Â¤Â¸Ã Â¤Â¾Ã Â¤Â®Ã Â¤Â¯Ã Â¤Â¿Ã Â¤â€¢Ã Â¥â‚¬"
                 : "AI-curated current affairs for UPSC & BPSC preparation",
 
         search:
             language === "hi"
-                ? "à¤–à¥‹à¤œà¥‡à¤‚"
+                ? "Ã Â¤â€“Ã Â¥â€¹Ã Â¤Å“Ã Â¥â€¡Ã Â¤â€š"
                 : "Search News",
 
         searchPlaceholder:
             language === "hi"
-                ? "Current Affairs à¤–à¥‹à¤œà¥‡à¤‚..."
+                ? "Current Affairs Ã Â¤â€“Ã Â¥â€¹Ã Â¤Å“Ã Â¥â€¡Ã Â¤â€š..."
                 : "Search current affairs...",
 
         exam:
             language === "hi"
-                ? "à¤ªà¤°à¥€à¤•à¥à¤·à¤¾"
+                ? "Ã Â¤ÂªÃ Â¤Â°Ã Â¥â‚¬Ã Â¤â€¢Ã Â¥ÂÃ Â¤Â·Ã Â¤Â¾"
                 : "Exam",
 
         language:
             language === "hi"
-                ? "à¤­à¤¾à¤·à¤¾"
+                ? "Ã Â¤Â­Ã Â¤Â¾Ã Â¤Â·Ã Â¤Â¾"
                 : "Language",
 
         category:
             language === "hi"
-                ? "à¤¶à¥à¤°à¥‡à¤£à¥€"
+                ? "Ã Â¤Â¶Ã Â¥ÂÃ Â¤Â°Ã Â¥â€¡Ã Â¤Â£Ã Â¥â‚¬"
                 : "Category",
 
         bihar:
             language === "hi"
-                ? "à¤•à¥‡à¤µà¤² à¤¬à¤¿à¤¹à¤¾à¤°"
+                ? "Ã Â¤â€¢Ã Â¥â€¡Ã Â¤ÂµÃ Â¤Â² Ã Â¤Â¬Ã Â¤Â¿Ã Â¤Â¹Ã Â¤Â¾Ã Â¤Â°"
                 : "Bihar Only",
 
         reset:
             language === "hi"
-                ? "à¤°à¥€à¤¸à¥‡à¤Ÿ"
+                ? "Ã Â¤Â°Ã Â¥â‚¬Ã Â¤Â¸Ã Â¥â€¡Ã Â¤Å¸"
                 : "Reset",
 
         readMcq:
             language === "hi"
-                ? "à¤ªà¤¢à¤¼à¥‡à¤‚ à¤”à¤° MCQs"
+                ? "Ã Â¤ÂªÃ Â¤Â¢Ã Â¤Â¼Ã Â¥â€¡Ã Â¤â€š Ã Â¤â€Ã Â¤Â° MCQs"
                 : "Read & MCQs",
 
         source:
             language === "hi"
-                ? "à¤¸à¥à¤°à¥‹à¤¤"
+                ? "Ã Â¤Â¸Ã Â¥ÂÃ Â¤Â°Ã Â¥â€¹Ã Â¤Â¤"
                 : "Source",
 
         previous:
             language === "hi"
-                ? "â† à¤ªà¤¿à¤›à¤²à¤¾"
-                : "â† Previous",
+                ? "Ã¢â€ Â Ã Â¤ÂªÃ Â¤Â¿Ã Â¤â€ºÃ Â¤Â²Ã Â¤Â¾"
+                : "Ã¢â€ Â Previous",
 
         next:
             language === "hi"
-                ? "à¤…à¤—à¤²à¤¾ â†’"
-                : "Next â†’",
+                ? "Ã Â¤â€¦Ã Â¤â€”Ã Â¤Â²Ã Â¤Â¾ Ã¢â€ â€™"
+                : "Next Ã¢â€ â€™",
 
         loading:
             language === "hi"
-                ? "à¤²à¥‹à¤¡ à¤¹à¥‹ à¤°à¤¹à¤¾ à¤¹à¥ˆ..."
+                ? "Ã Â¤Â²Ã Â¥â€¹Ã Â¤Â¡ Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â°Ã Â¤Â¹Ã Â¤Â¾ Ã Â¤Â¹Ã Â¥Ë†..."
                 : "Loading...",
 
         noNews:
             language === "hi"
-                ? "à¤•à¥‹à¤ˆ Current Affairs à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾à¥¤"
+                ? "Ã Â¤â€¢Ã Â¥â€¹Ã Â¤Ë† Current Affairs Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â®Ã Â¤Â¿Ã Â¤Â²Ã Â¤Â¾Ã Â¥Â¤"
                 : "No current affairs found.",
 
         mcqPractice:
             language === "hi"
-                ? "MCQ à¤…à¤­à¥à¤¯à¤¾à¤¸"
+                ? "MCQ Ã Â¤â€¦Ã Â¤Â­Ã Â¥ÂÃ Â¤Â¯Ã Â¤Â¾Ã Â¤Â¸"
                 : "MCQ Practice",
 
         generateMcq:
             language === "hi"
-                ? "MCQs Generate / View à¤•à¤°à¥‡à¤‚"
+                ? "MCQs Generate / View Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€š"
                 : "Generate / View MCQs",
 
         mcqLoading:
             language === "hi"
-                ? "MCQs Generate à¤¹à¥‹ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚..."
+                ? "MCQs Generate Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â°Ã Â¤Â¹Ã Â¥â€¡ Ã Â¤Â¹Ã Â¥Ë†Ã Â¤â€š..."
                 : "Generating MCQs...",
 
         noMcq:
             language === "hi"
-                ? "à¤‡à¤¸ article à¤•à¥‡ à¤²à¤¿à¤ à¤…à¤­à¥€ MCQs à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¤‚à¥¤"
+                ? "Ã Â¤â€¡Ã Â¤Â¸ article Ã Â¤â€¢Ã Â¥â€¡ Ã Â¤Â²Ã Â¤Â¿Ã Â¤Â Ã Â¤â€¦Ã Â¤Â­Ã Â¥â‚¬ MCQs Ã Â¤â€°Ã Â¤ÂªÃ Â¤Â²Ã Â¤Â¬Ã Â¥ÂÃ Â¤Â§ Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥Ë†Ã Â¤â€šÃ Â¥Â¤"
                 : "No MCQs are currently available for this article.",
 
         explanation:
             language === "hi"
-                ? "à¤µà¥à¤¯à¤¾à¤–à¥à¤¯à¤¾:"
+                ? "Ã Â¤ÂµÃ Â¥ÂÃ Â¤Â¯Ã Â¤Â¾Ã Â¤â€“Ã Â¥ÂÃ Â¤Â¯Ã Â¤Â¾:"
                 : "Explanation:",
 
         answer:
             language === "hi"
-                ? "à¤¸à¤¹à¥€ à¤‰à¤¤à¥à¤¤à¤°:"
+                ? "Ã Â¤Â¸Ã Â¤Â¹Ã Â¥â‚¬ Ã Â¤â€°Ã Â¤Â¤Ã Â¥ÂÃ Â¤Â¤Ã Â¤Â°:"
                 : "Answer:",
 
         openSource:
             language === "hi"
-                ? "Source à¤–à¥‹à¤²à¥‡à¤‚"
+                ? "Source Ã Â¤â€“Ã Â¥â€¹Ã Â¤Â²Ã Â¥â€¡Ã Â¤â€š"
                 : "Open Source",
     };
 
@@ -2179,7 +2268,7 @@ export default function News() {
                                     fontWeight: 700,
                                 }}
                             >
-                                âœ“ Access
+                                Ã¢Å“â€œ Access
                             </span>
                         )}
                     </div>
@@ -2484,7 +2573,7 @@ export default function News() {
                                     <option value="">
                                         {language ===
                                         "hi"
-                                            ? "à¤¸à¤­à¥€ à¤¶à¥à¤°à¥‡à¤£à¤¿à¤¯à¤¾à¤"
+                                            ? "Ã Â¤Â¸Ã Â¤Â­Ã Â¥â‚¬ Ã Â¤Â¶Ã Â¥ÂÃ Â¤Â°Ã Â¥â€¡Ã Â¤Â£Ã Â¤Â¿Ã Â¤Â¯Ã Â¤Â¾Ã Â¤Â"
                                             : "All Categories"}
                                     </option>
 
@@ -2681,8 +2770,8 @@ export default function News() {
                         }}
                     >
                         {paymentLoading
-                            ? "ðŸ’³ "
-                            : "â„¹ï¸ "}
+                            ? "Ã°Å¸â€™Â³ "
+                            : "Ã¢â€žÂ¹Ã¯Â¸Â "}
                         {paymentMessage}
                     </div>
                 )}
@@ -2707,7 +2796,7 @@ export default function News() {
                         <strong>
                             {language ===
                             "hi"
-                                ? "News à¤²à¥‹à¤¡ à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡"
+                                ? "News Ã Â¤Â²Ã Â¥â€¹Ã Â¤Â¡ Ã Â¤Â¨Ã Â¤Â¹Ã Â¥â‚¬Ã Â¤â€š Ã Â¤Â¹Ã Â¥â€¹ Ã Â¤Â¸Ã Â¤â€¢Ã Â¥â€¡"
                                 : "News could not be loaded"}
                         </strong>
 
@@ -2746,7 +2835,7 @@ export default function News() {
                         >
                             {language ===
                             "hi"
-                                ? "à¤¦à¥‹à¤¬à¤¾à¤°à¤¾ à¤ªà¥à¤°à¤¯à¤¾à¤¸ à¤•à¤°à¥‡à¤‚"
+                                ? "Ã Â¤Â¦Ã Â¥â€¹Ã Â¤Â¬Ã Â¤Â¾Ã Â¤Â°Ã Â¤Â¾ Ã Â¤ÂªÃ Â¥ÂÃ Â¤Â°Ã Â¤Â¯Ã Â¤Â¾Ã Â¤Â¸ Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€š"
                                 : "Retry"}
                         </button>
                     </div>
@@ -3001,7 +3090,7 @@ export default function News() {
                                                             }}
                                                         >
                                                             {article.source &&
-                                                                `${article.source} â€¢ `}
+                                                                `${article.source} Ã¢â‚¬Â¢ `}
 
                                                             {formatDate(
                                                                 article.published_at
@@ -3261,7 +3350,7 @@ export default function News() {
                                         selectedArticle.category ||
                                         "General"
                                     }{" "}
-                                    â€¢{" "}
+                                    Ã¢â‚¬Â¢{" "}
                                     {
                                         selectedArticle.exam ||
                                         exam
@@ -3303,7 +3392,7 @@ export default function News() {
                                         0,
                                 }}
                             >
-                                Ã—
+                                Ãƒâ€”
                             </button>
                         </div>
 
@@ -3502,7 +3591,7 @@ export default function News() {
                                 >
                                     {language ===
                                     "hi"
-                                        ? "MCQ à¤«à¤¿à¤° à¤¸à¥‡ Generate à¤•à¤°à¥‡à¤‚"
+                                        ? "MCQ Ã Â¤Â«Ã Â¤Â¿Ã Â¤Â° Ã Â¤Â¸Ã Â¥â€¡ Generate Ã Â¤â€¢Ã Â¤Â°Ã Â¥â€¡Ã Â¤â€š"
                                         : "Retry MCQs"}
                                 </button>
                             </div>
@@ -3559,7 +3648,7 @@ export default function News() {
                                     >
                                         {language ===
                                         "hi"
-                                            ? "à¤¹à¤¿à¤‚à¤¦à¥€"
+                                            ? "Ã Â¤Â¹Ã Â¤Â¿Ã Â¤â€šÃ Â¤Â¦Ã Â¥â‚¬"
                                             : "English"}
                                     </span>
                                 </div>
@@ -3801,7 +3890,7 @@ export default function News() {
                                 "nowrap",
                         }}
                     >
-                        ðŸ’³ â‚¹1 News Access
+                        Ã°Å¸â€™Â³ Ã¢â€šÂ¹1 News Access
                         Payment
                     </div>
                 </div>
@@ -3809,3 +3898,6 @@ export default function News() {
         </div>
     );
 }
+
+
+

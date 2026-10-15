@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -111,7 +111,7 @@ function Signup() {
 
             } else if (err.request) {
                 setError(
-                    "Server à¤¸à¥‡ connection à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤°à¤¹à¤¾à¥¤ Please check your internet connection and try again."
+                    "Server से connection नहीं हो रहा। Please check your internet connection and try again."
                 );
 
             } else {
