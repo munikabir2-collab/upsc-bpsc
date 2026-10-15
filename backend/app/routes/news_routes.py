@@ -11,6 +11,8 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Header,
+    Request,
 )
 
 from pydantic import BaseModel
@@ -64,6 +66,7 @@ from app.services.news_payment_service import (
     create_news_order,
     verify_news_payment,
     require_news_access,
+    handle_razorpay_webhook,
 )
 
 
@@ -2908,3 +2911,23 @@ def get_news(
         article
     )
 
+
+# ============================================================
+# RAZORPAY WEBHOOK (no login: Razorpay calls this directly)
+# ============================================================
+
+@router.post("/payment/webhook")
+async def razorpay_webhook_endpoint(
+    request: Request,
+    x_razorpay_signature: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Razorpay server-to-server payment notification."""
+
+    raw_body = await request.body()
+
+    return handle_razorpay_webhook(
+        db=db,
+        raw_body=raw_body,
+        signature=x_razorpay_signature,
+    )
