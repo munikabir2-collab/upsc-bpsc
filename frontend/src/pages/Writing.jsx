@@ -444,7 +444,7 @@ export default function Writing() {
           );
         }
 
-        if (!window.Razorpay) {
+        if (!window.Razorpay && !window.NativePay) {
           throw new Error(
             "Razorpay SDK load नहीं हुआ। कृपया index.html में Razorpay script जोड़ें।"
           );
@@ -534,7 +534,61 @@ export default function Writing() {
             color: "#172033",
           },
         };
+              if (window.NativePay) {
+          window.onNativePayment = async (res) => {
+            window.onNativePayment = null;
 
+            if (res.status === "success") {
+              try {
+                const verification = await apiRequest(
+                  "/writing/payment/verify",
+                  {
+                    method: "POST",
+                    body: JSON.stringify({
+                      plan: "weekly",
+                      razorpay_order_id: res.razorpay_order_id,
+                      razorpay_payment_id: res.razorpay_payment_id,
+                      razorpay_signature: res.razorpay_signature,
+                    }),
+                  }
+                );
+
+                const verifiedSubscription =
+                  verification?.subscription ||
+                  verification?.data ||
+                  verification;
+
+                setSubscription(verifiedSubscription);
+
+                setSuccess(
+                  "🎉 ₹39 Writing Plan activate हो गया। आपको 7 दिन और 10 answers मिल गए हैं।"
+                );
+
+                await fetchSubscription();
+              } catch (err) {
+                setError(err.message || "Payment verify नहीं हो पाया।");
+              } finally {
+                setBuyingSubscription(false);
+              }
+            } else {
+              setError(res.message || "Payment failed.");
+              setBuyingSubscription(false);
+            }
+          };
+
+          window.NativePay.postMessage(
+            JSON.stringify({
+              key: options.key,
+              order_id: options.order_id,
+              amount: options.amount,
+              currency: options.currency,
+              description: options.description,
+              contact: "",
+              email: "",
+            })
+          );
+          return;
+        }
         const razorpay =
           new window.Razorpay(
             options
