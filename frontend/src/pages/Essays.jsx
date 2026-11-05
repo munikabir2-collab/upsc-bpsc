@@ -93,11 +93,11 @@ function Essays() {
                 <div style={styles.topBar}>
                     <div>
                         <Link to="/dashboard" style={styles.backLink}>
-                            â† Dashboard
+                            {"\u2190"} Dashboard
                         </Link>
 
                         <h1 style={styles.title}>
-                            ðŸ“š Essay Practice
+                            {"\u{1F4DA}"} Essay Practice
                         </h1>
 
                         <p style={styles.subtitle}>
@@ -175,7 +175,7 @@ function Essays() {
 
                     {error && (
                         <div style={styles.error}>
-                            âš ï¸ {error}
+                            {"\u2190"} {error}
                         </div>
                     )}
 
@@ -192,7 +192,7 @@ function Essays() {
                     >
                         {loading
                             ? "Generating..."
-                            : "ðŸš€ Generate Essay"}
+                            : "\u{1F680} Generate Essay"}
                     </button>
                 </section>
 
@@ -241,7 +241,7 @@ function Essays() {
 
                         <div style={styles.practiceBox}>
                             <strong>
-                                âœï¸ Practice
+                                {"\u2728"} Practice
                             </strong>
 
                             <p>
@@ -257,7 +257,7 @@ function Essays() {
                 {!essay && !loading && !error && (
                     <section style={styles.emptyCard}>
                         <div style={styles.emptyIcon}>
-                            ðŸ“š
+                            {"\u{1F4DA}"}
                         </div>
 
                         <h2>
@@ -492,3 +492,8 @@ const styles = {
 };
 
 export default Essays;
+
+
+
+
+

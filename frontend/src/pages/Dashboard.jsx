@@ -423,28 +423,28 @@ function Dashboard() {
 
     const stats = [
         {
-            icon: "",
+            icon: "\u{1F4F0}",
             title: "Current Affairs",
             value: newsCount,
             description: "Articles available",
             path: "/news",
         },
         {
-            icon: "",
+            icon: "\u{1F4CB}",
             title: "MCQ Practice",
             value: mcqCount,
             description: "Questions available",
             path: "/mcqs",
         },
         {
-            icon: "",
+            icon: "\u{1F4DD}",
             title: "Answer Writing",
             value: writingCount,
             description: "Writing questions",
             path: "/writing",
         },
         {
-            icon: "",
+            icon: "\u{1F4DA}",
             title: "Essays",
             value: essayCount,
             description: "Essay practice",
@@ -458,28 +458,28 @@ function Dashboard() {
 
     const quickPractice = [
         {
-            icon: "",
+            icon: "\u{1F4F0}",
             title: "Current Affairs",
             description:
                 "Read important UPSC & BPSC news",
             path: "/news",
         },
         {
-            icon: "",
+            icon: "\u{1F4CB}",
             title: "Practice MCQs",
             description:
                 "Test your knowledge",
             path: "/mcqs",
         },
         {
-            icon: "",
+            icon: "\u{1F4DD}",
             title: "Answer Writing",
             description:
                 "Practice mains answers",
             path: "/writing",
         },
         {
-            icon: "",
+            icon: "\u{1F4DA}",
             title: "Essay Practice",
             description:
                 "Improve your essay writing",
@@ -493,25 +493,25 @@ function Dashboard() {
 
     const todayPlan = [
         {
-            icon: "",
+            icon: "\u{1F4F0}",
             title: "Read Current Affairs",
             description: `${newsCount} articles available`,
             path: "/news",
         },
         {
-            icon: "",
+            icon: "\u{1F4CB}",
             title: "Practice MCQs",
             description: `${mcqCount} questions available`,
             path: "/mcqs",
         },
         {
-            icon: "",
+            icon: "\u{1F4DD}",
             title: "Write an Answer",
             description: `${writingCount} writing questions`,
             path: "/writing",
         },
         {
-            icon: "",
+            icon: "\u{1F4DA}",
             title: "Practice Essay",
             description: "Continue your essay preparation",
             path: "/essays",
@@ -623,7 +623,7 @@ function Dashboard() {
 
                 <div style={styles.proCard}>
                     <div style={styles.proIcon}>
-                        â­
+                        {"\u2B50"}
                     </div>
 
                     <div style={styles.proTitle}>
@@ -770,7 +770,7 @@ function Dashboard() {
 
                                 <div style={styles.statValue}>
                                     {loading
-                                        ? "â€”"
+                                        ? "\u2014"
                                         : item.value}
                                 </div>
 
