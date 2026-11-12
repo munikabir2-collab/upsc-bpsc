@@ -91,8 +91,7 @@ The updated version will be published in the repository.
 
 ## 12. Contact
 
-For privacy-related questions or requests, please contact the platform administrator through the contact information provided by the application.
-
+For privacy-related questions or requests, please contact us at **munidevika13@gmail.com**.
 ---
 
 **UPSC-BPSC Educational Platform**
