@@ -5,6 +5,7 @@ import {
     Navigate,
 } from "react-router-dom";
 
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 
@@ -18,6 +19,12 @@ function App() {
     return (
         <BrowserRouter>
             <Routes>
+
+                {/* Privacy Policy - Public Page */}
+                <Route
+                    path="/privacy-policy"
+                    element={<PrivacyPolicy />}
+                />
 
                 {/* Default */}
                 <Route
@@ -88,4 +95,3 @@ function App() {
 }
 
 export default App;
-
