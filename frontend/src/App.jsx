@@ -6,6 +6,7 @@ import {
 } from "react-router-dom";
 
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import DeleteAccount from "./pages/DeleteAccount";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 
@@ -25,7 +26,11 @@ function App() {
                     path="/privacy-policy"
                     element={<PrivacyPolicy />}
                 />
-
+                {/* Delete Account - Public Page */}
+               <Route
+                    path="/delete-account"
+                    element={<DeleteAccount />}
+               />
                 {/* Default */}
                 <Route
                     path="/"
