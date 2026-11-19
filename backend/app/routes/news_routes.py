@@ -1858,7 +1858,27 @@ async def _search_news_internal(
         except Exception:
             pass
 
+    # --------------------------------------------------------
+    # FINAL RESPONSE
+    # --------------------------------------------------------
 
+    return {
+        "status": "success",
+        "query": q,
+        "language": language,
+        "exam": exam,
+        "category": category,
+        "bihar_only": bihar_only,
+        "page": page,
+        "page_size": page_size,
+        "raw_total_results": raw_total,
+        "raw_articles": len(raw_articles),
+        "filtered_results": total_filtered,
+        "returned_results": len(saved_articles),
+        "saved_results": len(saved_articles),
+        "total": total_filtered,
+        "articles": saved_articles,
+    }
 # ============================================================
 # SEARCH
 # ============================================================
