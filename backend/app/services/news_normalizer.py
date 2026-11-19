@@ -584,7 +584,9 @@ def normalize_article(
     url = normalize_url(
         article.get("url")
     )
-
+    official_source_url = normalize_url(
+        article.get("official_source_url")
+    )
     source = normalize_source(
         article
     )
@@ -619,6 +621,8 @@ def normalize_article(
         "description": description,
 
         "url": url,
+
+        "official_source_url": official_source_url,
 
         "source": source,
 

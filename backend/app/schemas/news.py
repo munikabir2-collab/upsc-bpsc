@@ -40,6 +40,8 @@ class NewsArticle(BaseModel):
     content: Optional[str] = None
 
     url: Optional[str] = None
+    
+    official_source_url: Optional[str] = None
 
     source: Optional[str] = None
 

@@ -1,7 +1,12 @@
-﻿import os
+﻿
+import os
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import (
+    create_engine,
+    inspect,
+    text,
+)
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
@@ -23,6 +28,7 @@ if DATABASE_URL.startswith("postgresql://"):
     )
 
 connect_args = {}
+
 if DATABASE_URL.startswith("sqlite"):
     connect_args["check_same_thread"] = False
 
@@ -43,6 +49,7 @@ Base = declarative_base()
 
 def get_db():
     db = SessionLocal()
+
     try:
         yield db
     finally:
@@ -58,3 +65,42 @@ def create_tables():
     from app.models.writing_subscription import WritingSubscription
 
     Base.metadata.create_all(bind=engine)
+
+
+def add_official_source_url_column():
+    """
+    Safely add official_source_url to current_affairs
+    without deleting or modifying existing records.
+    """
+
+    inspector = inspect(engine)
+
+    if not inspector.has_table("current_affairs"):
+        print(
+            "current_affairs table does not exist. "
+            "Migration skipped."
+        )
+        return
+
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("current_affairs")
+    }
+
+    if "official_source_url" in columns:
+        print(
+            "official_source_url column already exists."
+        )
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE current_affairs "
+                "ADD COLUMN official_source_url VARCHAR(1000)"
+            )
+        )
+
+    print(
+        "official_source_url column added successfully."
+    )

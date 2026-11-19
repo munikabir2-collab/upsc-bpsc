@@ -52,7 +52,10 @@ class CurrentAffair(Base):
         String(1000),
         nullable=True,
     )
-
+    official_source_url = Column(
+        String(1000),
+        nullable=True,
+    )
     source = Column(
         String(200),
         nullable=True,

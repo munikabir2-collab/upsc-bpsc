@@ -855,6 +855,7 @@ def _normalize_article(
     # All strings here are correctly closed.
     preserved_fields = {
         "category",
+        "official_source_url", 
         "exam",
         "importance",
         "exam_relevance",

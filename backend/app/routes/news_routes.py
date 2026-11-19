@@ -4,7 +4,7 @@ import inspect
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
-
+from app.services.official_source_resolver import resolve_official_source
 from fastapi import (
     APIRouter,
     Body,
@@ -921,7 +921,12 @@ def article_to_dict(
             )
             or None
         ),
-
+       "official_source_url": (
+            _clean_text(
+                article.official_source_url
+            )
+            or None
+        ),
         "source": (
             _clean_text(
                 article.source
@@ -1039,7 +1044,7 @@ def _upsert_current_affair(
         )
         or None
     )
-
+ 
     language = (
         _clean_text(
             language,
@@ -1089,6 +1094,13 @@ def _upsert_current_affair(
             ),
 
         "url": url,
+
+        "official_source_url": (
+            _clean_text(
+                article.get("official_source_url")
+            )
+            or None
+        ),
 
         "source":
             _clean_text(
@@ -1247,7 +1259,10 @@ def _upsert_current_affair(
         for field, value in valid_data.items():
 
             if (
-                field == "title"
+                field in {
+                    "title",
+                    "official_source_url",
+                }
                 and not value
             ):
                 continue
@@ -1722,24 +1737,73 @@ async def _search_news_internal(
     paginated = filtered[
         start:start + page_size
     ]
-
     # --------------------------------------------------------
-    # DATABASE
+    # DATABASE + OFFICIAL SOURCE VERIFICATION
     # --------------------------------------------------------
 
     saved_articles = []
+
+    official_source_checks = 0
+    max_official_source_checks = 5
 
     for article in paginated:
 
         try:
 
-            saved_article = (
-                _upsert_current_affair(
-                    db=db,
-                    article=article,
-                    language=language,
-                    requested_exam=exam,
+            # --------------------------------------------
+            # OFFICIAL SOURCE RESOLUTION
+            # --------------------------------------------
+
+            if (
+                not _clean_text(
+                    article.get("official_source_url")
                 )
+                and official_source_checks
+                < max_official_source_checks
+            ):
+
+                official_source_checks += 1
+
+                try:
+
+                    official_url = await resolve_official_source(
+                        article
+                    )
+
+                    if official_url:
+
+                        article["official_source_url"] = (
+                            official_url
+                        )
+
+                        logger.info(
+                            "Verified official source found: %s",
+                            article.get("title", "Unknown"),
+                        )
+
+                    else:
+
+                        logger.info(
+                            "No verified official source: %s",
+                            article.get("title", "Unknown"),
+                        )
+
+                except Exception:
+
+                    logger.exception(
+                        "Official source resolver failed: %s",
+                        article.get("title", "Unknown"),
+                    )
+
+            # --------------------------------------------
+            # SAVE ARTICLE
+            # --------------------------------------------
+
+            saved_article = _upsert_current_affair(
+                db=db,
+                article=article,
+                language=language,
+                requested_exam=exam,
             )
 
             saved_articles.append(
@@ -1762,6 +1826,10 @@ async def _search_news_internal(
                 "Failed saving article"
             )
 
+    # --------------------------------------------------------
+    # COMMIT
+    # --------------------------------------------------------
+
     if saved_articles:
 
         try:
@@ -1778,33 +1846,17 @@ async def _search_news_internal(
 
             saved_articles = []
 
+    # --------------------------------------------------------
+    # REFRESH
+    # --------------------------------------------------------
+
     for article in saved_articles:
 
         try:
             db.refresh(article)
+
         except Exception:
             pass
-
-    return {
-        "status": "success",
-        "query": q,
-        "language": language,
-        "exam": exam,
-        "category": category,
-        "bihar_only": bihar_only,
-        "page": page,
-        "page_size": page_size,
-        "raw_total_results": raw_total,
-        "raw_articles": len(raw_articles),
-        "filtered_results": total_filtered,
-        "returned_results": len(saved_articles),
-        "total": total_filtered,
-        "saved_results": len(saved_articles),
-        "articles": [
-            article_to_dict(article)
-            for article in saved_articles
-        ],
-    }
 
 
 # ============================================================

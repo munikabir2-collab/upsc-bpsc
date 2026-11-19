@@ -1,14 +1,20 @@
+
 from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.database import Base, engine
+from app.database import (
+    Base,
+    engine,
+    add_official_source_url_column,
+)
 
 # ============================================================
 # MODELS
 # ============================================================
+
 from app.models import (
     User,
     CurrentAffair,
@@ -17,10 +23,10 @@ from app.models import (
 
 from app.models.news_payment import NewsDailyPayment
 
-
 from app.models.writing_subscription import (
     WritingSubscription,
 )
+
 # ============================================================
 # ROUTES
 # ============================================================
@@ -37,15 +43,17 @@ from app.routes.writing_routes import (
     router as writing_router,
 )
 
-
 # ============================================================
 # DATABASE
 # ============================================================
 
+# Create missing tables first.
 Base.metadata.create_all(
     bind=engine
 )
 
+# Safely add official_source_url if missing.
+add_official_source_url_column()
 
 # ============================================================
 # APP
@@ -55,7 +63,6 @@ app = FastAPI(
     title="UPSC & BPSC Preparation SaaS Backend",
     version="1.0.0",
 )
-
 
 # ============================================================
 # CORS
@@ -68,7 +75,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # ============================================================
 # ROUTERS
@@ -86,7 +92,6 @@ app.include_router(
     writing_router
 )
 
-
 # ============================================================
 # ROOT
 # ============================================================
@@ -99,7 +104,6 @@ def root():
             "UPSC & BPSC Preparation SaaS Backend"
         ),
     }
-
 
 # ============================================================
 # HEALTH
