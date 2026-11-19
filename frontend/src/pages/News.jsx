@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
     useCallback,
     useEffect,
     useRef,
@@ -651,7 +651,7 @@ export default function News() {
             [getHeaders]
         );
 
-  
+
 /*
 |--------------------------------------------------------------------------
 | CREATE PAYMENT ORDER
@@ -2051,1110 +2051,869 @@ const openRazorpayPayment = useCallback(
             language === "hi"
                 ? "Source खोलें"
                 : "Open Source",
+        officialSource:
+            language === "hi"
+                ? "आधिकारिक सरकारी स्रोत"
+                : "Official Government Source",
     };
 
-    /*
-    |--------------------------------------------------------------------------
-    | RENDER
-    |--------------------------------------------------------------------------
-    */
+/*
+|--------------------------------------------------------------------------
+| RENDER
+|--------------------------------------------------------------------------
+*/
 
-    return (
-        <div
+return (
+    <div
+        style={{
+            minHeight: "100vh",
+            background: "#f8fafc",
+            color: "#0f172a",
+            paddingBottom: 60,
+        }}
+    >
+        {/* HEADER */}
+
+        <header
             style={{
-                minHeight: "100vh",
-                background: "#f8fafc",
-                color: "#0f172a",
-                paddingBottom: 60,
+                background: "#ffffff",
+                borderBottom: "1px solid #e2e8f0",
+                position: "sticky",
+                top: 0,
+                zIndex: 20,
             }}
         >
-            {/* HEADER */}
-
-            <header
-                style={{
-                    background: "#ffffff",
-                    borderBottom:
-                        "1px solid #e2e8f0",
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 20,
-                }}
-            >
-                <div
-                    style={{
-                        maxWidth: 1200,
-                        margin: "0 auto",
-                        padding:
-                            "16px 20px",
-                        display: "flex",
-                        alignItems:
-                            "center",
-                        justifyContent:
-                            "space-between",
-                        gap: 20,
-                    }}
-                >
-                    <div>
-                        <h1
-                            style={{
-                                margin: 0,
-                                fontSize: 24,
-                                fontWeight: 800,
-                            }}
-                        >
-                            Muni48
-                        </h1>
-
-                        <div
-                            style={{
-                                fontSize: 13,
-                                color:
-                                    "#64748b",
-                                marginTop: 3,
-                            }}
-                        >
-                            {t.title}
-                        </div>
-                    </div>
-
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems:
-                                "center",
-                            gap: 10,
-                        }}
-                    >
-                        <span
-                            style={{
-                                fontSize: 13,
-                                color:
-                                    "#64748b",
-                            }}
-                        >
-                            {user?.name ||
-                                "Student"}
-                        </span>
-
-                        {hasAccess && (
-                            <span
-                                style={{
-                                    background:
-                                        "#dcfce7",
-                                    color:
-                                        "#166534",
-                                    borderRadius:
-                                        999,
-                                    padding:
-                                        "6px 10px",
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                }}
-                            >
-                                ✓ Access
-                            </span>
-                        )}
-                    </div>
-                </div>
-            </header>
-
-            {/* MAIN */}
-
-            <main
+            <div
                 style={{
                     maxWidth: 1200,
                     margin: "0 auto",
-                    padding:
-                        "24px 20px",
+                    padding: "16px 20px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 20,
                 }}
             >
-                {/* FILTER */}
+                <div>
+                    <h1
+                        style={{
+                            margin: 0,
+                            fontSize: 24,
+                            fontWeight: 800,
+                        }}
+                    >
+                        Muni48
+                    </h1>
 
-                <section
+                    <div
+                        style={{
+                            fontSize: 13,
+                            color: "#64748b",
+                            marginTop: 3,
+                        }}
+                    >
+                        {t.title}
+                    </div>
+                </div>
+
+                <div
                     style={{
-                        background:
-                            "#ffffff",
-                        border:
-                            "1px solid #e2e8f0",
-                        borderRadius: 16,
-                        padding: 20,
-                        marginBottom: 20,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
                     }}
                 >
-                    <form
-                        onSubmit={
-                            handleSearch
-                        }
+                    <span
+                        style={{
+                            fontSize: 13,
+                            color: "#64748b",
+                        }}
                     >
-                        <div
+                        {user?.name || "Student"}
+                    </span>
+
+                    {hasAccess && (
+                        <span
                             style={{
-                                display:
-                                    "grid",
-                                gridTemplateColumns:
-                                    "repeat(auto-fit,minmax(180px,1fr))",
-                                gap: 12,
+                                background: "#dcfce7",
+                                color: "#166534",
+                                borderRadius: 999,
+                                padding: "6px 10px",
+                                fontSize: 12,
+                                fontWeight: 700,
                             }}
                         >
-                            {/* SEARCH */}
+                            ✓ Access
+                        </span>
+                    )}
+                </div>
+            </div>
+        </header>
 
-                            <div
+        {/* MAIN */}
+
+        <main
+            style={{
+                maxWidth: 1200,
+                margin: "0 auto",
+                padding: "24px 20px",
+            }}
+        >
+            {/* OFFICIAL GOVERNMENT SOURCES & DISCLAIMER */}
+
+            <section
+                style={{
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    borderRadius: 14,
+                    padding: 18,
+                    marginBottom: 20,
+                }}
+            >
+                <h2
+                    style={{
+                        margin: "0 0 10px",
+                        fontSize: 17,
+                        fontWeight: 800,
+                        color: "#1e3a8a",
+                    }}
+                >
+                    {language === "hi"
+                        ? "आधिकारिक सरकारी स्रोत"
+                        : "Official Government Sources"}
+                </h2>
+
+                <p
+                    style={{
+                        margin: "0 0 12px",
+                        fontSize: 13,
+                        lineHeight: 1.6,
+                        color: "#334155",
+                    }}
+                >
+                    {language === "hi"
+                        ? "Muni48 एक स्वतंत्र शैक्षिक प्लेटफॉर्म है। इसका UPSC, BPSC या किसी सरकारी संस्था से कोई आधिकारिक संबंध, समर्थन या प्रतिनिधित्व नहीं है। सरकारी सूचनाओं और अधिसूचनाओं की पुष्टि संबंधित आधिकारिक सरकारी वेबसाइट से करें।"
+                        : "Muni48 is an independent educational platform. It is not affiliated with, endorsed by, or representing UPSC, BPSC, or any government entity. Verify government information and notifications through the relevant official government websites."}
+                </p>
+
+                <div
+                    style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 10,
+                    }}
+                >
+                    {[
+                        {
+                            label: "UPSC Official Website",
+                            url: "https://upsc.gov.in/",
+                        },
+                        {
+                            label: "BPSC Official Website",
+                            url: "https://bpsc.bihar.gov.in/",
+                        },
+                        {
+                            label: "Press Information Bureau",
+                            url: "https://pib.gov.in/",
+                        },
+                        {
+                            label: "National Portal of India",
+                            url: "https://www.india.gov.in/",
+                        },
+                    ].map((item) => (
+                        <a
+                            key={item.label}
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                display: "inline-block",
+                                background: "#ffffff",
+                                border: "1px solid #93c5fd",
+                                borderRadius: 8,
+                                padding: "8px 12px",
+                                color: "#1d4ed8",
+                                fontSize: 12,
+                                fontWeight: 700,
+                                textDecoration: "none",
+                            }}
+                        >
+                            {item.label} ↗
+                        </a>
+                    ))}
+                </div>
+            </section>
+
+            {/* FILTER */}
+
+            <section
+                style={{
+                    background: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 16,
+                    padding: 20,
+                    marginBottom: 20,
+                }}
+            >
+                <form onSubmit={handleSearch}>
+                    <div
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                                "repeat(auto-fit,minmax(180px,1fr))",
+                            gap: 12,
+                        }}
+                    >
+                        {/* SEARCH */}
+
+                        <div style={{ gridColumn: "span 2" }}>
+                            <label
                                 style={{
-                                    gridColumn:
-                                        "span 2",
+                                    display: "block",
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    marginBottom: 6,
                                 }}
                             >
-                                <label
-                                    style={{
-                                        display:
-                                            "block",
-                                        fontSize: 13,
-                                        fontWeight:
-                                            700,
-                                        marginBottom:
-                                            6,
-                                    }}
-                                >
-                                    {t.search}
-                                </label>
+                                {t.search}
+                            </label>
 
+                            <input
+                                value={query}
+                                onChange={(event) =>
+                                    setQuery(event.target.value)
+                                }
+                                placeholder={t.searchPlaceholder}
+                                style={{
+                                    width: "100%",
+                                    boxSizing: "border-box",
+                                    padding: "11px 13px",
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: 10,
+                                    outline: "none",
+                                }}
+                            />
+                        </div>
+
+                        {/* EXAM */}
+
+                        <div>
+                            <label
+                                style={{
+                                    display: "block",
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    marginBottom: 6,
+                                }}
+                            >
+                                {t.exam}
+                            </label>
+
+                            <select
+                                value={exam}
+                                onChange={(event) => {
+                                    setExam(event.target.value);
+                                    setPage(1);
+                                    setMcqs([]);
+                                    setMcqVisible(false);
+                                }}
+                                style={{
+                                    width: "100%",
+                                    padding: "11px 13px",
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: 10,
+                                    background: "#ffffff",
+                                }}
+                            >
+                                {EXAMS.map((item) => (
+                                    <option key={item} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* LANGUAGE */}
+
+                        <div>
+                            <label
+                                style={{
+                                    display: "block",
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    marginBottom: 6,
+                                }}
+                            >
+                                {t.language}
+                            </label>
+
+                            <select
+                                value={language}
+                                onChange={(event) => {
+                                    setLanguage(event.target.value);
+                                    setPage(1);
+                                    setMcqs([]);
+                                    setMcqVisible(false);
+                                    setMcqError("");
+                                }}
+                                style={{
+                                    width: "100%",
+                                    padding: "11px 13px",
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: 10,
+                                    background: "#ffffff",
+                                }}
+                            >
+                                {LANGUAGES.map((item) => (
+                                    <option
+                                        key={item.value}
+                                        value={item.value}
+                                    >
+                                        {item.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* CATEGORY */}
+
+                        <div>
+                            <label
+                                style={{
+                                    display: "block",
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    marginBottom: 6,
+                                }}
+                            >
+                                {t.category}
+                            </label>
+
+                            <select
+                                value={category}
+                                onChange={(event) => {
+                                    setCategory(event.target.value);
+                                    setPage(1);
+                                }}
+                                style={{
+                                    width: "100%",
+                                    padding: "11px 13px",
+                                    border: "1px solid #cbd5e1",
+                                    borderRadius: 10,
+                                    background: "#ffffff",
+                                }}
+                            >
+                                <option value="">
+                                    {language === "hi"
+                                        ? "सभी श्रेणियाँ"
+                                        : "All Categories"}
+                                </option>
+
+                                {CATEGORIES.map((item) => (
+                                    <option key={item} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* BIHAR */}
+
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "flex-end",
+                            }}
+                        >
+                            <label
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    paddingBottom: 10,
+                                }}
+                            >
                                 <input
-                                    value={
-                                        query
-                                    }
-                                    onChange={(
-                                        event
-                                    ) =>
-                                        setQuery(
-                                            event
-                                                .target
-                                                .value
-                                        )
-                                    }
-                                    placeholder={
-                                        t.searchPlaceholder
-                                    }
-                                    style={{
-                                        width:
-                                            "100%",
-                                        boxSizing:
-                                            "border-box",
-                                        padding:
-                                            "11px 13px",
-                                        border:
-                                            "1px solid #cbd5e1",
-                                        borderRadius:
-                                            10,
-                                        outline:
-                                            "none",
+                                    type="checkbox"
+                                    checked={biharOnly}
+                                    onChange={(event) => {
+                                        setBiharOnly(
+                                            event.target.checked
+                                        );
+                                        setPage(1);
                                     }}
                                 />
-                            </div>
 
-                            {/* EXAM */}
-
-                            <div>
-                                <label
-                                    style={{
-                                        display:
-                                            "block",
-                                        fontSize: 13,
-                                        fontWeight:
-                                            700,
-                                        marginBottom:
-                                            6,
-                                    }}
-                                >
-                                    {t.exam}
-                                </label>
-
-                                <select
-                                    value={
-                                        exam
-                                    }
-                                    onChange={(
-                                        event
-                                    ) => {
-                                        setExam(
-                                            event
-                                                .target
-                                                .value
-                                        );
-
-                                        setPage(
-                                            1
-                                        );
-
-                                        setMcqs(
-                                            []
-                                        );
-
-                                        setMcqVisible(
-                                            false
-                                        );
-                                    }}
-                                    style={{
-                                        width:
-                                            "100%",
-                                        padding:
-                                            "11px 13px",
-                                        border:
-                                            "1px solid #cbd5e1",
-                                        borderRadius:
-                                            10,
-                                        background:
-                                            "#ffffff",
-                                    }}
-                                >
-                                    {EXAMS.map(
-                                        (
-                                            item
-                                        ) => (
-                                            <option
-                                                key={
-                                                    item
-                                                }
-                                                value={
-                                                    item
-                                                }
-                                            >
-                                                {
-                                                    item
-                                                }
-                                            </option>
-                                        )
-                                    )}
-                                </select>
-                            </div>
-
-                            {/* LANGUAGE */}
-
-                            <div>
-                                <label
-                                    style={{
-                                        display:
-                                            "block",
-                                        fontSize: 13,
-                                        fontWeight:
-                                            700,
-                                        marginBottom:
-                                            6,
-                                    }}
-                                >
-                                    {t.language}
-                                </label>
-
-                                <select
-                                    value={
-                                        language
-                                    }
-                                    onChange={(
-                                        event
-                                    ) => {
-                                        setLanguage(
-                                            event
-                                                .target
-                                                .value
-                                        );
-
-                                        setPage(
-                                            1
-                                        );
-
-                                        setMcqs(
-                                            []
-                                        );
-
-                                        setMcqVisible(
-                                            false
-                                        );
-
-                                        setMcqError(
-                                            ""
-                                        );
-                                    }}
-                                    style={{
-                                        width:
-                                            "100%",
-                                        padding:
-                                            "11px 13px",
-                                        border:
-                                            "1px solid #cbd5e1",
-                                        borderRadius:
-                                            10,
-                                        background:
-                                            "#ffffff",
-                                    }}
-                                >
-                                    {LANGUAGES.map(
-                                        (
-                                            item
-                                        ) => (
-                                            <option
-                                                key={
-                                                    item.value
-                                                }
-                                                value={
-                                                    item.value
-                                                }
-                                            >
-                                                {
-                                                    item.label
-                                                }
-                                            </option>
-                                        )
-                                    )}
-                                </select>
-                            </div>
-
-                            {/* CATEGORY */}
-
-                            <div>
-                                <label
-                                    style={{
-                                        display:
-                                            "block",
-                                        fontSize: 13,
-                                        fontWeight:
-                                            700,
-                                        marginBottom:
-                                            6,
-                                    }}
-                                >
-                                    {t.category}
-                                </label>
-
-                                <select
-                                    value={
-                                        category
-                                    }
-                                    onChange={(
-                                        event
-                                    ) => {
-                                        setCategory(
-                                            event
-                                                .target
-                                                .value
-                                        );
-
-                                        setPage(
-                                            1
-                                        );
-                                    }}
-                                    style={{
-                                        width:
-                                            "100%",
-                                        padding:
-                                            "11px 13px",
-                                        border:
-                                            "1px solid #cbd5e1",
-                                        borderRadius:
-                                            10,
-                                        background:
-                                            "#ffffff",
-                                    }}
-                                >
-                                    <option value="">
-                                        {language ===
-                                        "hi"
-                                            ? "सभी श्रेणियाँ"
-                                            : "All Categories"}
-                                    </option>
-
-                                    {CATEGORIES.map(
-                                        (
-                                            item
-                                        ) => (
-                                            <option
-                                                key={
-                                                    item
-                                                }
-                                                value={
-                                                    item
-                                                }
-                                            >
-                                                {
-                                                    item
-                                                }
-                                            </option>
-                                        )
-                                    )}
-                                </select>
-                            </div>
-
-                            {/* BIHAR */}
-
-                            <div
-                                style={{
-                                    display:
-                                        "flex",
-                                    alignItems:
-                                        "flex-end",
-                                }}
-                            >
-                                <label
-                                    style={{
-                                        display:
-                                            "flex",
-                                        alignItems:
-                                            "center",
-                                        gap: 8,
-                                        fontSize: 14,
-                                        fontWeight:
-                                            600,
-                                        cursor:
-                                            "pointer",
-                                        paddingBottom:
-                                            10,
-                                    }}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={
-                                            biharOnly
-                                        }
-                                        onChange={(
-                                            event
-                                        ) => {
-                                            setBiharOnly(
-                                                event
-                                                    .target
-                                                    .checked
-                                            );
-
-                                            setPage(
-                                                1
-                                            );
-                                        }}
-                                    />
-
-                                    {t.bihar}
-                                </label>
-                            </div>
+                                {t.bihar}
+                            </label>
                         </div>
-
-                        <div
-                            style={{
-                                marginTop: 16,
-                                display: "flex",
-                                gap: 10,
-                                flexWrap:
-                                    "wrap",
-                            }}
-                        >
-                            <button
-                                type="submit"
-                                disabled={
-                                    loading ||
-                                    paymentLoading
-                                }
-                                style={{
-                                    border: 0,
-                                    borderRadius:
-                                        10,
-                                    padding:
-                                        "11px 20px",
-                                    background:
-                                        "#2563eb",
-                                    color:
-                                        "#ffffff",
-                                    fontWeight:
-                                        700,
-                                    cursor:
-                                        loading ||
-                                        paymentLoading
-                                            ? "not-allowed"
-                                            : "pointer",
-                                    opacity:
-                                        loading ||
-                                        paymentLoading
-                                            ? 0.6
-                                            : 1,
-                                }}
-                            >
-                                {loading
-                                    ? t.loading
-                                    : t.search}
-                            </button>
-
-                            <button
-                                type="button"
-                                disabled={
-                                    loading ||
-                                    paymentLoading
-                                }
-                                onClick={() => {
-                                    setQuery(
-                                        "India"
-                                    );
-
-                                    setCategory(
-                                        ""
-                                    );
-
-                                    setBiharOnly(
-                                        false
-                                    );
-
-                                    setPage(
-                                        1
-                                    );
-
-                                    setMcqs(
-                                        []
-                                    );
-
-                                    setMcqVisible(
-                                        false
-                                    );
-
-                                    setMcqError(
-                                        ""
-                                    );
-                                }}
-                                style={{
-                                    border:
-                                        "1px solid #cbd5e1",
-                                    borderRadius:
-                                        10,
-                                    padding:
-                                        "11px 20px",
-                                    background:
-                                        "#ffffff",
-                                    cursor:
-                                        "pointer",
-                                    fontWeight:
-                                        600,
-                                }}
-                            >
-                                {t.reset}
-                            </button>
-                        </div>
-                    </form>
-                </section>
-
-                {/* PAYMENT MESSAGE */}
-
-                {paymentMessage && (
-                    <div
-                        style={{
-                            background:
-                                "#eff6ff",
-                            border:
-                                "1px solid #bfdbfe",
-                            color:
-                                "#1e40af",
-                            borderRadius:
-                                12,
-                            padding:
-                                "12px 15px",
-                            marginBottom: 18,
-                            fontSize: 14,
-                            fontWeight: 600,
-                        }}
-                    >
-                        {paymentLoading
-                            ? "💳 "
-                            : "ℹ️ "}
-                        {paymentMessage}
                     </div>
-                )}
 
-                {/* ERROR */}
-
-                {error && (
                     <div
                         style={{
-                            background:
-                                "#fef2f2",
-                            border:
-                                "1px solid #fecaca",
-                            color:
-                                "#991b1b",
-                            borderRadius:
-                                12,
-                            padding: 14,
-                            marginBottom: 18,
+                            marginTop: 16,
+                            display: "flex",
+                            gap: 10,
+                            flexWrap: "wrap",
                         }}
                     >
-                        <strong>
-                            {language ===
-                            "hi"
-                                ? "News लोड नहीं हो सके"
-                                : "News could not be loaded"}
-                        </strong>
-
-                        <div
+                        <button
+                            type="submit"
+                            disabled={loading || paymentLoading}
                             style={{
-                                marginTop: 5,
+                                border: 0,
+                                borderRadius: 10,
+                                padding: "11px 20px",
+                                background: "#2563eb",
+                                color: "#ffffff",
+                                fontWeight: 700,
+                                cursor:
+                                    loading || paymentLoading
+                                        ? "not-allowed"
+                                        : "pointer",
+                                opacity:
+                                    loading || paymentLoading
+                                        ? 0.6
+                                        : 1,
                             }}
                         >
-                            {error}
-                        </div>
+                            {loading ? t.loading : t.search}
+                        </button>
 
                         <button
                             type="button"
-                            onClick={() =>
-                                fetchNews(
-                                    {
-                                        requestedPage:
-                                            page,
-                                    }
-                                )
-                            }
+                            disabled={loading || paymentLoading}
+                            onClick={() => {
+                                setQuery("India");
+                                setCategory("");
+                                setBiharOnly(false);
+                                setPage(1);
+                                setMcqs([]);
+                                setMcqVisible(false);
+                                setMcqError("");
+                            }}
                             style={{
-                                marginTop: 10,
-                                border: 0,
-                                borderRadius:
-                                    8,
-                                padding:
-                                    "8px 14px",
-                                background:
-                                    "#991b1b",
-                                color:
-                                    "#ffffff",
-                                cursor:
-                                    "pointer",
+                                border: "1px solid #cbd5e1",
+                                borderRadius: 10,
+                                padding: "11px 20px",
+                                background: "#ffffff",
+                                cursor: "pointer",
+                                fontWeight: 600,
                             }}
                         >
-                            {language ===
-                            "hi"
-                                ? "दोबारा प्रयास करें"
-                                : "Retry"}
+                            {t.reset}
                         </button>
                     </div>
-                )}
+                </form>
+            </section>
 
-                {/* LOADING */}
+            {/* PAYMENT MESSAGE */}
 
-                {loading && (
-                    <div
+            {paymentMessage && (
+                <div
+                    style={{
+                        background: "#eff6ff",
+                        border: "1px solid #bfdbfe",
+                        color: "#1e40af",
+                        borderRadius: 12,
+                        padding: "12px 15px",
+                        marginBottom: 18,
+                        fontSize: 14,
+                        fontWeight: 600,
+                    }}
+                >
+                    {paymentLoading ? "💳 " : "ℹ️ "}
+                    {paymentMessage}
+                </div>
+            )}
+
+            {/* ERROR */}
+
+            {error && (
+                <div
+                    style={{
+                        background: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        color: "#991b1b",
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 18,
+                    }}
+                >
+                    <strong>
+                        {language === "hi"
+                            ? "News लोड नहीं हो सके"
+                            : "News could not be loaded"}
+                    </strong>
+
+                    <div style={{ marginTop: 5 }}>
+                        {error}
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() =>
+                            fetchNews({
+                                requestedPage: page,
+                            })
+                        }
                         style={{
-                            textAlign:
-                                "center",
-                            padding: 40,
-                            color:
-                                "#64748b",
+                            marginTop: 10,
+                            border: 0,
+                            borderRadius: 8,
+                            padding: "8px 14px",
+                            background: "#991b1b",
+                            color: "#ffffff",
+                            cursor: "pointer",
                         }}
                     >
-                        {t.loading}
-                    </div>
-                )}
+                        {language === "hi"
+                            ? "दोबारा प्रयास करें"
+                            : "Retry"}
+                    </button>
+                </div>
+            )}
 
-                {/* EMPTY */}
+            {/* LOADING */}
 
-                {!loading &&
-                    !error &&
-                    articles.length ===
-                        0 && (
-                        <div
-                            style={{
-                                background:
-                                    "#ffffff",
-                                border:
-                                    "1px solid #e2e8f0",
-                                borderRadius:
-                                    16,
-                                padding: 40,
-                                textAlign:
-                                    "center",
-                                color:
-                                    "#64748b",
-                            }}
-                        >
-                            {t.noNews}
-                        </div>
-                    )}
+            {loading && (
+                <div
+                    style={{
+                        textAlign: "center",
+                        padding: 40,
+                        color: "#64748b",
+                    }}
+                >
+                    {t.loading}
+                </div>
+            )}
 
-                {/* ARTICLES */}
+            {/* EMPTY */}
 
-                {!loading &&
-                    articles.length >
-                        0 && (
-                        <div
-                            style={{
-                                display:
-                                    "grid",
-                                gap: 16,
-                            }}
-                        >
-                            {articles.map(
-                                (
-                                    article,
+            {!loading && !error && articles.length === 0 && (
+                <div
+                    style={{
+                        background: "#ffffff",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 16,
+                        padding: 40,
+                        textAlign: "center",
+                        color: "#64748b",
+                    }}
+                >
+                    {t.noNews}
+                </div>
+            )}
+
+            {/* ARTICLES */}
+
+            {!loading && articles.length > 0 && (
+                <div
+                    style={{
+                        display: "grid",
+                        gap: 16,
+                    }}
+                >
+                    {articles.map((article, index) => {
+                        const articleId = getArticleId(article);
+
+                        return (
+                            <article
+                                key={
+                                    articleId ||
+                                    article.url ||
                                     index
-                                ) => {
-                                    const articleId =
-                                        getArticleId(
-                                            article
-                                        );
-
-                                    return (
-                                        <article
-                                            key={
-                                                articleId ||
-                                                article.url ||
-                                                index
-                                            }
+                                }
+                                style={{
+                                    background: "#ffffff",
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: 16,
+                                    overflow: "hidden",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        gap: 18,
+                                        padding: 18,
+                                    }}
+                                >
+                                    {article.image_url && (
+                                        <img
+                                            src={article.image_url}
+                                            alt=""
                                             style={{
-                                                background:
-                                                    "#ffffff",
-                                                border:
-                                                    "1px solid #e2e8f0",
-                                                borderRadius:
-                                                    16,
-                                                overflow:
-                                                    "hidden",
+                                                width: 150,
+                                                height: 100,
+                                                objectFit: "cover",
+                                                borderRadius: 10,
+                                                flexShrink: 0,
+                                            }}
+                                            onError={(event) => {
+                                                event.currentTarget.style.display =
+                                                    "none";
+                                            }}
+                                        />
+                                    )}
+
+                                    <div
+                                        style={{
+                                            flex: 1,
+                                            minWidth: 0,
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                flexWrap: "wrap",
+                                                gap: 7,
+                                                marginBottom: 8,
+                                            }}
+                                        >
+                                            <span
+                                                style={{
+                                                    background: "#dbeafe",
+                                                    color: "#1d4ed8",
+                                                    borderRadius: 999,
+                                                    padding: "4px 9px",
+                                                    fontSize: 11,
+                                                    fontWeight: 700,
+                                                }}
+                                            >
+                                                {article.exam || exam}
+                                            </span>
+
+                                            <span
+                                                style={{
+                                                    background: "#f1f5f9",
+                                                    color: "#475569",
+                                                    borderRadius: 999,
+                                                    padding: "4px 9px",
+                                                    fontSize: 11,
+                                                    fontWeight: 700,
+                                                }}
+                                            >
+                                                {article.category || "General"}
+                                            </span>
+
+                                            {article.bihar_relevant && (
+                                                <span
+                                                    style={{
+                                                        background: "#dcfce7",
+                                                        color: "#166534",
+                                                        borderRadius: 999,
+                                                        padding: "4px 9px",
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                    }}
+                                                >
+                                                    Bihar
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <h2
+                                            style={{
+                                                margin: "0 0 8px",
+                                                fontSize: 19,
+                                                lineHeight: 1.4,
+                                            }}
+                                        >
+                                            {article.title}
+                                        </h2>
+
+                                        {article.description && (
+                                            <p
+                                                style={{
+                                                    margin: "0 0 10px",
+                                                    color: "#475569",
+                                                    lineHeight: 1.6,
+                                                }}
+                                            >
+                                                {article.description}
+                                            </p>
+                                        )}
+
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                flexWrap: "wrap",
+                                                alignItems: "center",
+                                                justifyContent: "space-between",
+                                                gap: 10,
                                             }}
                                         >
                                             <div
                                                 style={{
-                                                    display:
-                                                        "flex",
-                                                    gap: 18,
-                                                    padding:
-                                                        18,
+                                                    fontSize: 12,
+                                                    color: "#64748b",
                                                 }}
                                             >
-                                                {article.image_url && (
-                                                    <img
-                                                        src={
-                                                            article.image_url
-                                                        }
-                                                        alt=""
-                                                        style={{
-                                                            width: 150,
-                                                            height: 100,
-                                                            objectFit:
-                                                                "cover",
-                                                            borderRadius:
-                                                                10,
-                                                            flexShrink:
-                                                                0,
-                                                        }}
-                                                        onError={(
-                                                            event
-                                                        ) => {
-                                                            event.currentTarget.style.display =
-                                                                "none";
-                                                        }}
-                                                    />
-                                                )}
+                                                {article.source &&
+                                                    `${article.source} • `}
 
-                                                <div
+                                                {formatDate(
+                                                    article.published_at
+                                                )}
+                                            </div>
+
+                                            <div
+                                                style={{
+                                                    display: "flex",
+                                                    gap: 8,
+                                                    flexWrap: "wrap",
+                                                }}
+                                            >
+                                                {/* READ & MCQ */}
+
+                                                <button
+                                                    type="button"
+                                                    disabled={
+                                                        paymentLoading ||
+                                                        !articleId
+                                                    }
+                                                    onClick={() =>
+                                                        openArticle(article)
+                                                    }
                                                     style={{
-                                                        flex: 1,
-                                                        minWidth:
-                                                            0,
+                                                        border: "1px solid #2563eb",
+                                                        color: "#2563eb",
+                                                        background: "#ffffff",
+                                                        borderRadius: 8,
+                                                        padding: "8px 12px",
+                                                        cursor:
+                                                            paymentLoading ||
+                                                            !articleId
+                                                                ? "not-allowed"
+                                                                : "pointer",
+                                                        fontWeight: 700,
+                                                        opacity: !articleId
+                                                            ? 0.5
+                                                            : 1,
                                                     }}
                                                 >
-                                                    <div
+                                                    {t.readMcq}
+                                                </button>
+
+                                                {/* PUBLISHER SOURCE */}
+
+                                                {article.url && (
+                                                    <a
+                                                        href={article.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
                                                         style={{
-                                                            display:
-                                                                "flex",
-                                                            flexWrap:
-                                                                "wrap",
-                                                            gap: 7,
-                                                            marginBottom:
-                                                                8,
+                                                            border: "1px solid #cbd5e1",
+                                                            color: "#334155",
+                                                            background: "#ffffff",
+                                                            borderRadius: 8,
+                                                            padding: "8px 12px",
+                                                            textDecoration: "none",
+                                                            fontWeight: 600,
                                                         }}
                                                     >
-                                                        <span
+                                                        {t.source}
+                                                    </a>
+                                                )}
+
+                                                {/* OFFICIAL GOVERNMENT SOURCE */}
+
+                                                {typeof article.official_source_url ===
+                                                    "string" &&
+                                                    /^https?:\/\//i.test(
+                                                        article.official_source_url.trim()
+                                                    ) && (
+                                                        <a
+                                                            href={article.official_source_url.trim()}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
                                                             style={{
-                                                                background:
-                                                                    "#dbeafe",
-                                                                color:
-                                                                    "#1d4ed8",
-                                                                borderRadius:
-                                                                    999,
-                                                                padding:
-                                                                    "4px 9px",
-                                                                fontSize:
-                                                                    11,
-                                                                fontWeight:
-                                                                    700,
+                                                                border: "1px solid #16a34a",
+                                                                color: "#166534",
+                                                                background: "#f0fdf4",
+                                                                borderRadius: 8,
+                                                                padding: "8px 12px",
+                                                                textDecoration: "none",
+                                                                fontWeight: 700,
                                                             }}
                                                         >
-                                                            {article.exam ||
-                                                                exam}
-                                                        </span>
-
-                                                        <span
-                                                            style={{
-                                                                background:
-                                                                    "#f1f5f9",
-                                                                color:
-                                                                    "#475569",
-                                                                borderRadius:
-                                                                    999,
-                                                                padding:
-                                                                    "4px 9px",
-                                                                fontSize:
-                                                                    11,
-                                                                fontWeight:
-                                                                    700,
-                                                            }}
-                                                        >
-                                                            {article.category ||
-                                                                "General"}
-                                                        </span>
-
-                                                        {article.bihar_relevant && (
-                                                            <span
-                                                                style={{
-                                                                    background:
-                                                                        "#dcfce7",
-                                                                    color:
-                                                                        "#166534",
-                                                                    borderRadius:
-                                                                        999,
-                                                                    padding:
-                                                                        "4px 9px",
-                                                                    fontSize:
-                                                                        11,
-                                                                    fontWeight:
-                                                                        700,
-                                                                }}
-                                                            >
-                                                                Bihar
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    <h2
-                                                        style={{
-                                                            margin:
-                                                                "0 0 8px",
-                                                            fontSize:
-                                                                19,
-                                                            lineHeight:
-                                                                1.4,
-                                                        }}
-                                                    >
-                                                        {
-                                                            article.title
-                                                        }
-                                                    </h2>
-
-                                                    {article.description && (
-                                                        <p
-                                                            style={{
-                                                                margin:
-                                                                    "0 0 10px",
-                                                                color:
-                                                                    "#475569",
-                                                                lineHeight:
-                                                                    1.6,
-                                                            }}
-                                                        >
-                                                            {
-                                                                article.description
-                                                            }
-                                                        </p>
+                                                            {t.officialSource} ↗
+                                                        </a>
                                                     )}
-
-                                                    <div
-                                                        style={{
-                                                            display:
-                                                                "flex",
-                                                            flexWrap:
-                                                                "wrap",
-                                                            alignItems:
-                                                                "center",
-                                                            justifyContent:
-                                                                "space-between",
-                                                            gap: 10,
-                                                        }}
-                                                    >
-                                                        <div
-                                                            style={{
-                                                                fontSize:
-                                                                    12,
-                                                                color:
-                                                                    "#64748b",
-                                                            }}
-                                                        >
-                                                            {article.source &&
-                                                                `${article.source} • `}
-
-                                                            {formatDate(
-                                                                article.published_at
-                                                            )}
-                                                        </div>
-
-                                                        <div
-                                                            style={{
-                                                                display:
-                                                                    "flex",
-                                                                gap: 8,
-                                                                flexWrap:
-                                                                    "wrap",
-                                                            }}
-                                                        >
-                                                            <button
-                                                                type="button"
-                                                                disabled={
-                                                                    paymentLoading ||
-                                                                    !articleId
-                                                                }
-                                                                onClick={() =>
-                                                                    openArticle(
-                                                                        article
-                                                                    )
-                                                                }
-                                                                style={{
-                                                                    border:
-                                                                        "1px solid #2563eb",
-                                                                    color:
-                                                                        "#2563eb",
-                                                                    background:
-                                                                        "#ffffff",
-                                                                    borderRadius:
-                                                                        8,
-                                                                    padding:
-                                                                        "8px 12px",
-                                                                    cursor:
-                                                                        paymentLoading ||
-                                                                        !articleId
-                                                                            ? "not-allowed"
-                                                                            : "pointer",
-                                                                    fontWeight:
-                                                                        700,
-                                                                    opacity:
-                                                                        !articleId
-                                                                            ? 0.5
-                                                                            : 1,
-                                                                }}
-                                                            >
-                                                                {t.readMcq}
-                                                            </button>
-
-                                                            {article.url && (
-                                                                <a
-                                                                    href={
-                                                                        article.url
-                                                                    }
-                                                                    target="_blank"
-                                                                    rel="noreferrer"
-                                                                    style={{
-                                                                        border:
-                                                                            "1px solid #cbd5e1",
-                                                                        color:
-                                                                            "#334155",
-                                                                        background:
-                                                                            "#ffffff",
-                                                                        borderRadius:
-                                                                            8,
-                                                                        padding:
-                                                                            "8px 12px",
-                                                                        textDecoration:
-                                                                            "none",
-                                                                        fontWeight:
-                                                                            600,
-                                                                    }}
-                                                                >
-                                                                    {t.source}
-                                                                </a>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
                                             </div>
-                                        </article>
-                                    );
-                                }
-                            )}
-                        </div>
-                    )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+                        );
+                    })}
+                </div>
+            )}
 
-                {/* PAGINATION */}
+            {/* PAGINATION */}
 
-                {!loading &&
-                    totalPages > 1 && (
-                        <div
-                            style={{
-                                display:
-                                    "flex",
-                                justifyContent:
-                                    "center",
-                                alignItems:
-                                    "center",
-                                gap: 10,
-                                marginTop: 24,
-                            }}
-                        >
-                            <button
-                                type="button"
-                                disabled={
-                                    page <=
-                                        1 ||
-                                    loading ||
-                                    paymentLoading
-                                }
-                                onClick={() =>
-                                    changePage(
-                                        page - 1
-                                    )
-                                }
-                                style={{
-                                    padding:
-                                        "9px 14px",
-                                    border:
-                                        "1px solid #cbd5e1",
-                                    borderRadius:
-                                        8,
-                                    background:
-                                        "#ffffff",
-                                    cursor:
-                                        "pointer",
-                                }}
-                            >
-                                {t.previous}
-                            </button>
+            {!loading && totalPages > 1 && (
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        gap: 10,
+                        marginTop: 24,
+                    }}
+                >
+                    <button
+                        type="button"
+                        disabled={
+                            page <= 1 ||
+                            loading ||
+                            paymentLoading
+                        }
+                        onClick={() => changePage(page - 1)}
+                        style={{
+                            padding: "9px 14px",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: 8,
+                            background: "#ffffff",
+                            cursor: "pointer",
+                        }}
+                    >
+                        {t.previous}
+                    </button>
 
-                            <span
-                                style={{
-                                    fontSize:
-                                        14,
-                                    fontWeight:
-                                        700,
-                                }}
-                            >
-                                {page} /{" "}
-                                {
-                                    totalPages
-                                }
-                            </span>
+                    <span
+                        style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                        }}
+                    >
+                        {page} / {totalPages}
+                    </span>
 
-                            <button
-                                type="button"
-                                disabled={
-                                    page >=
-                                        totalPages ||
-                                    loading ||
-                                    paymentLoading
-                                }
-                                onClick={() =>
-                                    changePage(
-                                        page + 1
-                                    )
-                                }
-                                style={{
-                                    padding:
-                                        "9px 14px",
-                                    border:
-                                        "1px solid #cbd5e1",
-                                    borderRadius:
-                                        8,
-                                    background:
-                                        "#ffffff",
-                                    cursor:
-                                        "pointer",
-                                }}
-                            >
-                                {t.next}
-                            </button>
-                        </div>
-                    )}
-            </main>
+                    <button
+                        type="button"
+                        disabled={
+                            page >= totalPages ||
+                            loading ||
+                            paymentLoading
+                        }
+                        onClick={() => changePage(page + 1)}
+                        style={{
+                            padding: "9px 14px",
+                            border: "1px solid #cbd5e1",
+                            borderRadius: 8,
+                            background: "#ffffff",
+                            cursor: "pointer",
+                        }}
+                    >
+                        {t.next}
+                    </button>
+                </div>
+            )}
+        </main>
 
             {/* ==========================================================
                 ARTICLE + MCQ MODAL
@@ -3385,33 +3144,23 @@ const openRazorpayPayment = useCallback(
                                     : t.generateMcq}
                             </button>
 
-                            {selectedArticle.url && (
-                                <a
-                                    href={
-                                        selectedArticle.url
-                                    }
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    style={{
-                                        border:
-                                            "1px solid #cbd5e1",
-                                        borderRadius:
-                                            9,
-                                        padding:
-                                            "10px 16px",
-                                        textDecoration:
-                                            "none",
-                                        color:
-                                            "#334155",
-                                        fontWeight:
-                                            700,
-                                    }}
-                                >
-                                    {
-                                        t.openSource
-                                    }
-                                </a>
-                            )}
+                  {selectedArticle.url && (
+    <a href={selectedArticle.url} target="_blank" rel="noopener noreferrer">
+        {t.openSource}
+    </a>
+)}
+
+{typeof selectedArticle.official_source_url === "string" &&
+    /^https?:\/\//i.test(selectedArticle.official_source_url.trim()) && (
+        <a
+            href={selectedArticle.official_source_url.trim()}
+            target="_blank"
+            rel="noopener noreferrer"
+        >
+            {t.officialSource} ↗
+        </a>
+    )}
+
                         </div>
 
                         {/* MCQ ERROR */}
