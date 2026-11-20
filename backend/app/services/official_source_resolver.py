@@ -38,8 +38,10 @@ GROQ_MODEL = os.getenv(
 
 PIB_BASE_URL = "https://www.pib.gov.in/"
 
-PIB_ALL_RELEASES_URL = (
-    "https://www.pib.gov.in/AllRelease.aspx?lang=1&reg=1"
+# English and Hindi PIB archives
+PIB_ALL_RELEASES_URLS = (
+    ("1", "https://www.pib.gov.in/AllRelease.aspx?lang=1&reg=1"),
+    ("2", "https://www.pib.gov.in/AllRelease.aspx?lang=2&reg=1"),
 )
 
 PIB_LINKS_FILE = (
@@ -73,21 +75,15 @@ _groq_lock = asyncio.Lock()
 
 
 async def _get_groq_client() -> AsyncGroq:
-
     global _groq_client
 
     if _groq_client is not None:
         return _groq_client
 
     async with _groq_lock:
-
         if _groq_client is None:
-
             if not GROQ_API_KEY:
-
-                raise RuntimeError(
-                    "GROQ_API_KEY is missing"
-                )
+                raise RuntimeError("GROQ_API_KEY is missing")
 
             _groq_client = AsyncGroq(
                 api_key=GROQ_API_KEY
@@ -101,9 +97,7 @@ async def _get_groq_client() -> AsyncGroq:
 # ============================================================
 
 def _is_official_domain(url: str) -> bool:
-
     try:
-
         parsed = urlparse(url)
 
         host = (
@@ -126,24 +120,23 @@ def _is_official_domain(url: str) -> bool:
         )
 
     except Exception:
-
         return False
 
 
 def _is_pib_url(url: str) -> bool:
-
     try:
-
         parsed = urlparse(url)
 
         return (
             parsed.scheme == "https"
             and (parsed.hostname or "").lower()
             == "www.pib.gov.in"
+            and parsed.port in (None, 443)
+            and not parsed.username
+            and not parsed.password
         )
 
     except Exception:
-
         return False
 
 
@@ -180,10 +173,7 @@ async def _safe_get(
             307,
             308,
         ):
-
-            location = response.headers.get(
-                "location"
-            )
+            location = response.headers.get("location")
 
             if not location:
                 return None
@@ -200,17 +190,14 @@ async def _safe_get(
                 return None
 
             current_url = next_url
-
             continue
 
         response.raise_for_status()
 
         if len(response.content) > MAX_RESPONSE_BYTES:
-
             logger.warning(
                 "Official page response too large"
             )
-
             return None
 
         content_type = response.headers.get(
@@ -235,16 +222,13 @@ async def _safe_get(
 # ============================================================
 
 def _extract_json(content: str) -> dict:
-
     try:
-
         data = json.loads(content)
 
         if isinstance(data, dict):
             return data
 
     except Exception:
-
         pass
 
     return {}
@@ -257,30 +241,20 @@ def _extract_json(content: str) -> dict:
 class _ReleaseListParser(HTMLParser):
 
     def __init__(self):
-
         super().__init__()
 
         self.releases = []
-
         self.href = None
-
         self.title_parts = []
 
-    def handle_starttag(
-        self,
-        tag,
-        attrs,
-    ):
+    def handle_starttag(self, tag, attrs):
 
         if tag != "a":
             return
 
         attrs = dict(attrs)
 
-        href = attrs.get(
-            "href",
-            "",
-        )
+        href = attrs.get("href", "")
 
         if not href:
             return
@@ -289,13 +263,9 @@ class _ReleaseListParser(HTMLParser):
             return
 
         self.href = href
-
         self.title_parts = []
 
-        title = attrs.get(
-            "title",
-            "",
-        )
+        title = attrs.get("title", "")
 
         if title:
             self.title_parts.append(title)
@@ -303,7 +273,6 @@ class _ReleaseListParser(HTMLParser):
     def handle_data(self, data):
 
         if self.href:
-
             value = data.strip()
 
             if value:
@@ -311,10 +280,7 @@ class _ReleaseListParser(HTMLParser):
 
     def handle_endtag(self, tag):
 
-        if (
-            tag == "a"
-            and self.href
-        ):
+        if tag == "a" and self.href:
 
             title = " ".join(
                 self.title_parts
@@ -326,7 +292,6 @@ class _ReleaseListParser(HTMLParser):
             })
 
             self.href = None
-
             self.title_parts = []
 
 
@@ -337,16 +302,10 @@ class _ReleaseListParser(HTMLParser):
 class _FrameParser(HTMLParser):
 
     def __init__(self):
-
         super().__init__()
-
         self.frame_src = None
 
-    def handle_starttag(
-        self,
-        tag,
-        attrs,
-    ):
+    def handle_starttag(self, tag, attrs):
 
         if tag != "iframe":
             return
@@ -357,10 +316,7 @@ class _FrameParser(HTMLParser):
             attrs.get("id")
             == "ContentPlaceHolder1_iframepressrealese"
         ):
-
-            self.frame_src = attrs.get(
-                "src"
-            )
+            self.frame_src = attrs.get("src")
 
 
 # ============================================================
@@ -379,22 +335,14 @@ class _ArticleParser(HTMLParser):
     }
 
     def __init__(self):
-
         super().__init__()
 
         self.text_parts = []
-
         self.title_parts = []
-
         self.blocked = 0
-
         self.in_title = False
 
-    def handle_starttag(
-        self,
-        tag,
-        attrs,
-    ):
+    def handle_starttag(self, tag, attrs):
 
         if tag == "title":
             self.in_title = True
@@ -408,7 +356,6 @@ class _ArticleParser(HTMLParser):
             self.in_title = False
 
         if tag in self.BLOCKED_TAGS:
-
             self.blocked = max(
                 0,
                 self.blocked - 1,
@@ -446,12 +393,15 @@ class _PIBArticleParser(HTMLParser):
 
     def __init__(self):
         super().__init__()
+
         self.fields = {
             key: [] for key in self.TARGET_IDS
         }
+
         self.active = []
 
     def handle_starttag(self, tag, attrs):
+
         attrs = dict(attrs)
 
         for item in self.active:
@@ -468,19 +418,25 @@ class _PIBArticleParser(HTMLParser):
             })
 
     def handle_endtag(self, tag):
+
         completed = []
 
         for item in self.active:
+
             if tag not in self.VOID_TAGS:
                 item["depth"] -= 1
 
-            if item["depth"] <= 0 and item["tag"] == tag:
+            if (
+                item["depth"] <= 0
+                and item["tag"] == tag
+            ):
                 completed.append(item)
 
         for item in completed:
             self.active.remove(item)
 
     def handle_data(self, data):
+
         value = data.strip()
 
         if not value:
@@ -492,57 +448,33 @@ class _PIBArticleParser(HTMLParser):
 
 # ============================================================
 # TEXT NORMALIZATION
+# Supports English and Hindi (Devanagari)
 # ============================================================
 
 STOP_WORDS = {
-    "the",
-    "and",
-    "for",
-    "from",
-    "with",
-    "that",
-    "this",
-    "will",
-    "has",
-    "have",
-    "into",
-    "its",
-    "their",
-    "about",
-    "over",
-    "under",
-    "india",
-    "indian",
-    "shri",
-    "smt",
-    "minister",
-    "government",
-    "to",
-    "of",
-    "in",
-    "on",
-    "at",
-    "by",
-    "a",
-    "an",
+    "the", "and", "for", "from", "with",
+    "that", "this", "will", "has", "have",
+    "into", "its", "their", "about", "over",
+    "under", "india", "indian", "shri", "smt",
+    "minister", "government", "to", "of",
+    "in", "on", "at", "by", "a", "an",
 }
 
 
 def _normalize(value: str) -> str:
 
-    value = str(
-        value or ""
-    ).lower()
+    value = str(value or "").lower()
 
+    # Preserve Unicode letters and digits,
+    # including Hindi / Devanagari characters.
     value = re.sub(
-        r"[^a-z0-9]+",
+        r"[^\w]+",
         " ",
         value,
+        flags=re.UNICODE,
     )
 
-    return " ".join(
-        value.split()
-    )
+    return " ".join(value.split())
 
 
 def _tokens(value: str) -> set[str]:
@@ -560,13 +492,8 @@ def _title_score(
     release_title: str,
 ) -> float:
 
-    left = _normalize(
-        article_title
-    )
-
-    right = _normalize(
-        release_title
-    )
+    left = _normalize(article_title)
+    right = _normalize(release_title)
 
     if not left or not right:
         return 0.0
@@ -578,7 +505,6 @@ def _title_score(
     ).ratio()
 
     left_tokens = _tokens(left)
-
     right_tokens = _tokens(right)
 
     if not left_tokens or not right_tokens:
@@ -621,13 +547,8 @@ def _load_local_releases() -> list[dict]:
                 "data",
             ):
 
-                if isinstance(
-                    data.get(key),
-                    list,
-                ):
-
+                if isinstance(data.get(key), list):
                     data = data[key]
-
                     break
 
         if not isinstance(data, list):
@@ -665,12 +586,27 @@ def _load_local_releases() -> list[dict]:
             if not _is_pib_url(absolute_url):
                 continue
 
-            if "PRID=" not in absolute_url.upper():
+            prid = _get_prid(absolute_url)
+
+            if not prid:
                 continue
+
+            parsed = urlparse(absolute_url)
+
+            query = parsed.query.lower()
+
+            language = (
+                "2" if re.search(
+                    r"(?:^|&)lang=2(?:&|$)",
+                    query,
+                ) else "1"
+            )
 
             releases.append({
                 "title": str(title).strip(),
                 "url": absolute_url,
+                "prid": prid,
+                "language": language,
             })
 
         return releases
@@ -686,58 +622,73 @@ def _load_local_releases() -> list[dict]:
 
 # ============================================================
 # FETCH LIVE PIB RELEASE LIST
+# English + Hindi
 # ============================================================
 
 async def _fetch_live_releases(
     client: httpx.AsyncClient,
 ) -> list[dict]:
 
-    try:
+    releases = []
 
-        response = await _safe_get(
-            client,
-            PIB_ALL_RELEASES_URL,
-            pib_only=True,
-        )
+    for language, archive_url in PIB_ALL_RELEASES_URLS:
 
-        if response is None:
-            return []
+        try:
 
-        parser = _ReleaseListParser()
-
-        parser.feed(
-            response.text
-        )
-
-        releases = []
-
-        for item in parser.releases:
-
-            absolute_url = urljoin(
-                str(response.url),
-                item["url"],
+            response = await _safe_get(
+                client,
+                archive_url,
+                pib_only=True,
             )
 
-            if not _is_pib_url(absolute_url):
+            if response is None:
                 continue
 
-            if "PRID=" not in absolute_url.upper():
-                continue
+            parser = _ReleaseListParser()
 
-            releases.append({
-                "title": item["title"],
-                "url": absolute_url,
-            })
+            parser.feed(response.text)
+            parser.close()
 
-        return releases
+            archive_count = 0
 
-    except Exception:
+            for item in parser.releases:
 
-        logger.exception(
-            "PIB release list unavailable"
-        )
+                absolute_url = urljoin(
+                    str(response.url),
+                    item["url"],
+                )
 
-        return []
+                if not _is_pib_url(absolute_url):
+                    continue
+
+                prid = _get_prid(absolute_url)
+
+                if not prid:
+                    continue
+
+                releases.append({
+                    "title": item["title"],
+                    "url": absolute_url,
+                    "prid": prid,
+                    "language": language,
+                })
+
+                archive_count += 1
+
+            logger.info(
+                "PIB archive fetched: language=%s releases=%s",
+                language,
+                archive_count,
+            )
+
+        except Exception:
+
+            logger.exception(
+                "PIB archive unavailable: language=%s",
+                language,
+            )
+
+    return releases
 
 
 # ============================================================
@@ -761,6 +712,7 @@ def _get_prid(url: str) -> str | None:
 
 # ============================================================
 # RANK PIB RELEASES BY TITLE
+# Keep the best language/title for each PRID.
 # ============================================================
 
 def _rank_releases(
@@ -768,9 +720,7 @@ def _rank_releases(
     releases: list[dict],
 ) -> list[dict]:
 
-    ranked = []
-
-    seen = set()
+    best_by_prid = {}
 
     for item in releases:
 
@@ -787,26 +737,37 @@ def _rank_releases(
 
         prid = _get_prid(url)
 
-        if not prid or prid in seen:
+        if not prid:
             continue
-
-        seen.add(prid)
 
         score = _title_score(
             article_title,
             title,
         )
 
-        if score >= MIN_TITLE_SCORE:
+        if score < MIN_TITLE_SCORE:
+            continue
 
-            ranked.append({
-                "title": title,
-                "url": url,
-                "prid": prid,
-                "score": score,
-            })
+        candidate = {
+            "title": title,
+            "url": url,
+            "prid": prid,
+            "language": str(
+                item.get("language") or "1"
+            ),
+            "score": score,
+        }
 
-    ranked.sort(
+        previous = best_by_prid.get(prid)
+
+        if (
+            previous is None
+            or score > previous["score"]
+        ):
+            best_by_prid[prid] = candidate
+
+    ranked = sorted(
+        best_by_prid.values(),
         key=lambda item: item["score"],
         reverse=True,
     )
@@ -870,7 +831,9 @@ async def _extract_claim(
     )
 
     if not response.choices:
-        logger.warning("Groq claim extraction returned no choices")
+        logger.warning(
+            "Groq claim extraction returned no choices"
+        )
         return {}
 
     data = _extract_json(
@@ -894,19 +857,24 @@ async def _extract_claim(
 
 # ============================================================
 # FETCH REAL PIB ARTICLE
+# Supports English and Hindi
 # ============================================================
 
 async def _fetch_pib_article(
     client: httpx.AsyncClient,
     prid: str,
+    language: str = "1",
 ) -> tuple[str, str] | None:
 
     if not prid.isdigit():
         return None
 
+    if language not in {"1", "2"}:
+        return None
+
     article_url = (
         f"{PIB_BASE_URL}PressReleasePage.aspx"
-        f"?PRID={prid}"
+        f"?PRID={prid}&reg=48&lang={language}"
     )
 
     article_response = await _safe_get(
@@ -921,10 +889,12 @@ async def _fetch_pib_article(
     final_url = str(article_response.url)
 
     if not _is_pib_url(final_url):
+
         logger.warning(
             "PIB article redirected outside PIB domain: %s",
             final_url,
         )
+
         return None
 
     parser = _PIBArticleParser()
@@ -932,6 +902,7 @@ async def _fetch_pib_article(
     parser.feed(
         article_response.text[:MAX_RESPONSE_BYTES]
     )
+
     parser.close()
 
     def field_text(field_name: str) -> str:
@@ -941,6 +912,7 @@ async def _fetch_pib_article(
 
     title = field_text("Titleh2")
     ministry = field_text("MinistryName")
+
     posted_on = " ".join(
         field_text("PrDateTime").split()
     )
@@ -957,18 +929,22 @@ async def _fetch_pib_article(
     )
 
     if release_digits != prid:
+
         logger.warning(
             "PIB Release ID mismatch: requested=%s received=%s",
             prid,
             release_id_text,
         )
+
         return None
 
     if not title or len(body) < 150:
+
         logger.warning(
             "PIB article content incomplete for PRID %s",
             prid,
         )
+
         return None
 
     if len(body) > MAX_PAGE_CHARS:
@@ -983,8 +959,9 @@ async def _fetch_pib_article(
     )
 
     logger.info(
-        "PIB article fetched successfully: PRID=%s title=%s",
+        "PIB article fetched successfully: PRID=%s language=%s title=%s",
         prid,
+        language,
         title[:120],
     )
 
@@ -1051,7 +1028,9 @@ async def _verify_pib_article(
     )
 
     if not result.choices:
-        logger.warning("Groq PIB verification returned no choices")
+        logger.warning(
+            "Groq PIB verification returned no choices"
+        )
         return False
 
     data = _extract_json(
@@ -1091,9 +1070,7 @@ async def resolve_official_source(
 
     try:
 
-        extracted = await _extract_claim(
-            article
-        )
+        extracted = await _extract_claim(article)
 
         if not extracted:
             return None
@@ -1157,6 +1134,7 @@ async def resolve_official_source(
                 pib_article = await _fetch_pib_article(
                     client,
                     candidate["prid"],
+                    candidate["language"],
                 )
 
                 if not pib_article:
@@ -1174,8 +1152,9 @@ async def resolve_official_source(
                 if matched:
 
                     logger.info(
-                        "Verified PIB source PRID=%s",
+                        "Verified PIB source PRID=%s language=%s",
                         candidate["prid"],
+                        candidate["language"],
                     )
 
                     return official_url
