@@ -9,7 +9,7 @@ import re
 from difflib import SequenceMatcher
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from dotenv import load_dotenv
@@ -28,7 +28,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 
 GROQ_MODEL = os.getenv(
     "GROQ_MODEL",
-    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-120b",
 ).strip()
 
 
@@ -731,11 +731,10 @@ async def _fetch_live_releases(
 
         return releases
 
-    except Exception as exc:
+    except Exception:
 
-        logger.warning(
-            "PIB release list unavailable: %s",
-            type(exc).__name__,
+        logger.exception(
+            "PIB release list unavailable"
         )
 
         return []
@@ -841,6 +840,9 @@ async def _extract_claim(
     response = await client.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0,
+        max_completion_tokens=1024,
+        reasoning_effort="low",
+        include_reasoning=False,
         response_format={
             "type": "json_object"
         },
@@ -867,6 +869,10 @@ async def _extract_claim(
         ],
     )
 
+    if not response.choices:
+        logger.warning("Groq claim extraction returned no choices")
+        return {}
+
     data = _extract_json(
         response.choices[0].message.content or "{}"
     )
@@ -887,7 +893,7 @@ async def _extract_claim(
 
 
 # ============================================================
-# FETCH REAL PIB ARTICLE FROM IFRAME
+# FETCH REAL PIB ARTICLE
 # ============================================================
 
 async def _fetch_pib_article(
@@ -898,8 +904,6 @@ async def _fetch_pib_article(
     if not prid.isdigit():
         return None
 
-    # Direct article endpoint. The Detail.aspx page is only
-    # a JavaScript shell and does not expose the iframe src.
     article_url = (
         f"{PIB_BASE_URL}PressReleasePage.aspx"
         f"?PRID={prid}"
@@ -943,6 +947,7 @@ async def _fetch_pib_article(
 
     if posted_on.lower().startswith("posted on:"):
         posted_on = posted_on.split(":", 1)[1].strip()
+
     body = field_text("pibReleaseBody")
     release_id_text = field_text("ReleaseId")
 
@@ -951,7 +956,6 @@ async def _fetch_pib_article(
         if char.isdigit()
     )
 
-    # Never accept a different PIB release.
     if release_digits != prid:
         logger.warning(
             "PIB Release ID mismatch: requested=%s received=%s",
@@ -1013,6 +1017,9 @@ async def _verify_pib_article(
     result = await groq.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0,
+        max_completion_tokens=2048,
+        reasoning_effort="low",
+        include_reasoning=False,
         response_format={
             "type": "json_object"
         },
@@ -1043,6 +1050,10 @@ async def _verify_pib_article(
         ],
     )
 
+    if not result.choices:
+        logger.warning("Groq PIB verification returned no choices")
+        return False
+
     data = _extract_json(
         result.choices[0].message.content or "{}"
     )
@@ -1064,8 +1075,7 @@ async def resolve_official_source(
     Returns None if:
     - No specific government claim exists.
     - No PIB title match is found.
-    - The PIB article iframe is unavailable.
-    - The article content cannot be extracted.
+    - The PIB article content cannot be extracted.
     - Groq cannot verify the exact claim.
     """
 
@@ -1081,20 +1091,12 @@ async def resolve_official_source(
 
     try:
 
-        # ----------------------------------------------------
-        # 1. Extract government claim.
-        # ----------------------------------------------------
-
         extracted = await _extract_claim(
             article
         )
 
         if not extracted:
             return None
-
-        # ----------------------------------------------------
-        # 2. Create HTTP client.
-        # ----------------------------------------------------
 
         timeout = httpx.Timeout(
             timeout=REQUEST_TIMEOUT,
@@ -1118,10 +1120,6 @@ async def resolve_official_source(
             max_redirects=0,
         ) as client:
 
-            # ------------------------------------------------
-            # 3. Load live and local PIB releases.
-            # ------------------------------------------------
-
             live_releases = await _fetch_live_releases(
                 client
             )
@@ -1140,10 +1138,6 @@ async def resolve_official_source(
 
                 return None
 
-            # ------------------------------------------------
-            # 4. Match article title to PIB release titles.
-            # ------------------------------------------------
-
             candidates = _rank_releases(
                 article_title,
                 combined,
@@ -1157,10 +1151,6 @@ async def resolve_official_source(
                 )
 
                 return None
-
-            # ------------------------------------------------
-            # 5. Fetch iframe content and verify.
-            # ------------------------------------------------
 
             for candidate in candidates:
 
@@ -1192,11 +1182,10 @@ async def resolve_official_source(
 
         return None
 
-    except Exception as exc:
+    except Exception:
 
-        logger.warning(
-            "Official source resolver unavailable: %s",
-            type(exc).__name__,
+        logger.exception(
+            "Official source resolver failed"
         )
 
         return None

@@ -15,7 +15,7 @@ import React, {
 | - Category
 | - Bihar only
 | - News search
-| - ₹1 Razorpay daily access
+| - â‚¹1 Razorpay daily access
 | - Existing MCQ GET
 | - MCQ generation POST JSON
 | - 402 => Razorpay
@@ -43,7 +43,7 @@ const LANGUAGES = [
     },
     {
         value: "hi",
-        label: "हिंदी",
+        label: "à¤¹à¤¿à¤‚à¤¦à¥€",
     },
 ];
 
@@ -883,7 +883,7 @@ const openRazorpayPayment = useCallback(
       setPaymentLoading(true);
 
       try {
-        setPaymentMessage("Preparing ₹1 payment...");
+        setPaymentMessage("Preparing â‚¹1 payment...");
 
         await loadRazorpayScript();
 
@@ -894,7 +894,7 @@ const openRazorpayPayment = useCallback(
          */
         if (order?.has_access === true || order?.access_active === true) {
           setHasAccess(true);
-          setPaymentMessage("✓ Today's access is already active.");
+          setPaymentMessage("âœ“ Today's access is already active.");
 
           if (typeof afterPayment === "function") {
             await afterPayment();
@@ -978,7 +978,7 @@ const openRazorpayPayment = useCallback(
                 }
 
                 setHasAccess(true);
-                setPaymentMessage("✓ ₹1 payment verified.");
+                setPaymentMessage("âœ“ â‚¹1 payment verified.");
 
                 if (typeof afterPayment === "function") {
                   await afterPayment();
@@ -1058,7 +1058,7 @@ const openRazorpayPayment = useCallback(
         console.error("Payment error:", paymentError);
 
         setPaymentMessage(
-          paymentError?.message || "Unable to process ₹1 payment."
+          paymentError?.message || "Unable to process â‚¹1 payment."
         );
 
         throw paymentError;
@@ -1176,7 +1176,7 @@ const openRazorpayPayment = useCallback(
                         setLoading(false);
 
                         setPaymentMessage(
-                            "Today's News access requires ₹1 payment."
+                            "Today's News access requires â‚¹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1325,7 +1325,7 @@ const openRazorpayPayment = useCallback(
                     setMcqVisible(true);
                     setMcqError(
                         language === "hi"
-                            ? "इस article का valid ID नहीं मिला।"
+                            ? "à¤‡à¤¸ article à¤•à¤¾ valid ID à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾à¥¤"
                             : "Valid article ID was not found."
                     );
                     return;
@@ -1400,8 +1400,8 @@ const openRazorpayPayment = useCallback(
 
                         setPaymentMessage(
                             language === "hi"
-                                ? "आज के MCQ access के लिए ₹1 payment आवश्यक है।"
-                                : "Today's MCQ access requires ₹1 payment."
+                                ? "à¤†à¤œ à¤•à¥‡ MCQ access à¤•à¥‡ à¤²à¤¿à¤ â‚¹1 payment à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤"
+                                : "Today's MCQ access requires â‚¹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1426,7 +1426,7 @@ const openRazorpayPayment = useCallback(
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "Session समाप्त हो गया है। कृपया फिर से login करें।"
+                                ? "Session à¤¸à¤®à¤¾à¤ªà¥à¤¤ à¤¹à¥‹ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤«à¤¿à¤° à¤¸à¥‡ login à¤•à¤°à¥‡à¤‚à¥¤"
                                 : "Session expired. Please login again."
                         );
                     }
@@ -1442,7 +1442,7 @@ const openRazorpayPayment = useCallback(
                             getErrorMessage(
                                 getData,
                                 language === "hi"
-                                    ? `MCQ load नहीं हो सके (${getResponse.status}).`
+                                    ? `MCQ load à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡ (${getResponse.status}).`
                                     : `MCQs could not be loaded (${getResponse.status}).`
                             )
                         );
@@ -1491,7 +1491,7 @@ const openRazorpayPayment = useCallback(
 
                     setPaymentMessage(
                         language === "hi"
-                            ? "MCQs generate हो रहे हैं..."
+                            ? "MCQs generate à¤¹à¥‹ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚..."
                             : "Generating MCQs..."
                     );
 
@@ -1568,8 +1568,8 @@ const openRazorpayPayment = useCallback(
 
                         setPaymentMessage(
                             language === "hi"
-                                ? "MCQ generate करने के लिए ₹1 payment आवश्यक है।"
-                                : "MCQ generation requires ₹1 payment."
+                                ? "MCQ generate à¤•à¤°à¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤ â‚¹1 payment à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤"
+                                : "MCQ generation requires â‚¹1 payment."
                         );
 
                         await openRazorpayPayment(
@@ -1594,7 +1594,7 @@ const openRazorpayPayment = useCallback(
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "Session समाप्त हो गया है। कृपया फिर से login करें।"
+                                ? "Session à¤¸à¤®à¤¾à¤ªà¥à¤¤ à¤¹à¥‹ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤ à¤•à¥ƒà¤ªà¤¯à¤¾ à¤«à¤¿à¤° à¤¸à¥‡ login à¤•à¤°à¥‡à¤‚à¥¤"
                                 : "Session expired. Please login again."
                         );
                     }
@@ -1633,7 +1633,7 @@ const openRazorpayPayment = useCallback(
                             getErrorMessage(
                                 generateData,
                                 language === "hi"
-                                    ? `MCQs generate नहीं हो सके (${generateResponse.status}).`
+                                    ? `MCQs generate à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡ (${generateResponse.status}).`
                                     : `MCQs could not be generated (${generateResponse.status}).`
                             )
                         );
@@ -1707,7 +1707,7 @@ const openRazorpayPayment = useCallback(
                     ) {
                         throw new Error(
                             language === "hi"
-                                ? "MCQ generation complete हुआ, लेकिन backend ने कोई valid MCQ return नहीं किया।"
+                                ? "MCQ generation complete à¤¹à¥à¤†, à¤²à¥‡à¤•à¤¿à¤¨ backend à¤¨à¥‡ à¤•à¥‹à¤ˆ valid MCQ return à¤¨à¤¹à¥€à¤‚ à¤•à¤¿à¤¯à¤¾à¥¤"
                                 : "MCQ generation completed, but the backend returned no valid MCQs."
                         );
                     }
@@ -1726,7 +1726,7 @@ const openRazorpayPayment = useCallback(
                     setMcqError(
                         mcqFetchError?.message ||
                             (language === "hi"
-                                ? "MCQs load नहीं हो सके।"
+                                ? "MCQs load à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡à¥¤"
                                 : "MCQs could not be loaded.")
                     );
                 } finally {
@@ -1866,7 +1866,7 @@ const openRazorpayPayment = useCallback(
 
                 setMcqError(
                     language === "hi"
-                        ? "Article ID उपलब्ध नहीं है।"
+                        ? "Article ID à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤"
                         : "Article ID is missing."
                 );
             }
@@ -1944,116 +1944,116 @@ const openRazorpayPayment = useCallback(
     const t = {
         title:
             language === "hi"
-                ? "समसामयिकी"
+                ? "à¤¸à¤®à¤¸à¤¾à¤®à¤¯à¤¿à¤•à¥€"
                 : "Current Affairs",
 
         subtitle:
             language === "hi"
-                ? "UPSC एवं BPSC की तैयारी के लिए AI-क्यूरेटेड समसामयिकी"
+                ? "UPSC à¤à¤µà¤‚ BPSC à¤•à¥€ à¤¤à¥ˆà¤¯à¤¾à¤°à¥€ à¤•à¥‡ à¤²à¤¿à¤ AI-à¤•à¥à¤¯à¥‚à¤°à¥‡à¤Ÿà¥‡à¤¡ à¤¸à¤®à¤¸à¤¾à¤®à¤¯à¤¿à¤•à¥€"
                 : "AI-curated current affairs for UPSC & BPSC preparation",
 
         search:
             language === "hi"
-                ? "खोजें"
+                ? "à¤–à¥‹à¤œà¥‡à¤‚"
                 : "Search News",
 
         searchPlaceholder:
             language === "hi"
-                ? "Current Affairs खोजें..."
+                ? "Current Affairs à¤–à¥‹à¤œà¥‡à¤‚..."
                 : "Search current affairs...",
 
         exam:
             language === "hi"
-                ? "परीक्षा"
+                ? "à¤ªà¤°à¥€à¤•à¥à¤·à¤¾"
                 : "Exam",
 
         language:
             language === "hi"
-                ? "भाषा"
+                ? "à¤­à¤¾à¤·à¤¾"
                 : "Language",
 
         category:
             language === "hi"
-                ? "श्रेणी"
+                ? "à¤¶à¥à¤°à¥‡à¤£à¥€"
                 : "Category",
 
         bihar:
             language === "hi"
-                ? "केवल बिहार"
+                ? "à¤•à¥‡à¤µà¤² à¤¬à¤¿à¤¹à¤¾à¤°"
                 : "Bihar Only",
 
         reset:
             language === "hi"
-                ? "रीसेट"
+                ? "à¤°à¥€à¤¸à¥‡à¤Ÿ"
                 : "Reset",
 
         readMcq:
             language === "hi"
-                ? "पढ़ें और MCQs"
+                ? "à¤ªà¤¢à¤¼à¥‡à¤‚ à¤”à¤° MCQs"
                 : "Read & MCQs",
 
         source:
             language === "hi"
-                ? "स्रोत"
+                ? "à¤¸à¥à¤°à¥‹à¤¤"
                 : "Source",
 
         previous:
             language === "hi"
-                ? "← पिछला"
-                : "← Previous",
+                ? "â† à¤ªà¤¿à¤›à¤²à¤¾"
+                : "â† Previous",
 
         next:
             language === "hi"
-                ? "अगला →"
-                : "Next →",
+                ? "à¤…à¤—à¤²à¤¾ â†’"
+                : "Next â†’",
 
         loading:
             language === "hi"
-                ? "लोड हो रहा है..."
+                ? "à¤²à¥‹à¤¡ à¤¹à¥‹ à¤°à¤¹à¤¾ à¤¹à¥ˆ..."
                 : "Loading...",
 
         noNews:
             language === "hi"
-                ? "कोई Current Affairs नहीं मिला।"
+                ? "à¤•à¥‹à¤ˆ Current Affairs à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾à¥¤"
                 : "No current affairs found.",
 
         mcqPractice:
             language === "hi"
-                ? "MCQ अभ्यास"
+                ? "MCQ à¤…à¤­à¥à¤¯à¤¾à¤¸"
                 : "MCQ Practice",
 
         generateMcq:
             language === "hi"
-                ? "MCQs Generate / View करें"
+                ? "MCQs Generate / View à¤•à¤°à¥‡à¤‚"
                 : "Generate / View MCQs",
 
         mcqLoading:
             language === "hi"
-                ? "MCQs Generate हो रहे हैं..."
+                ? "MCQs Generate à¤¹à¥‹ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚..."
                 : "Generating MCQs...",
 
         noMcq:
             language === "hi"
-                ? "इस article के लिए अभी MCQs उपलब्ध नहीं हैं।"
+                ? "à¤‡à¤¸ article à¤•à¥‡ à¤²à¤¿à¤ à¤…à¤­à¥€ MCQs à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¤‚à¥¤"
                 : "No MCQs are currently available for this article.",
 
         explanation:
             language === "hi"
-                ? "व्याख्या:"
+                ? "à¤µà¥à¤¯à¤¾à¤–à¥à¤¯à¤¾:"
                 : "Explanation:",
 
         answer:
             language === "hi"
-                ? "सही उत्तर:"
+                ? "à¤¸à¤¹à¥€ à¤‰à¤¤à¥à¤¤à¤°:"
                 : "Answer:",
 
         openSource:
             language === "hi"
-                ? "Source खोलें"
+                ? "Source à¤–à¥‹à¤²à¥‡à¤‚"
                 : "Open Source",
         officialSource:
             language === "hi"
-                ? "आधिकारिक सरकारी स्रोत"
+                ? "à¤†à¤§à¤¿à¤•à¤¾à¤°à¤¿à¤• à¤¸à¤°à¤•à¤¾à¤°à¥€ à¤¸à¥à¤°à¥‹à¤¤"
                 : "Official Government Source",
     };
 
@@ -2143,7 +2143,7 @@ return (
                                 fontWeight: 700,
                             }}
                         >
-                            ✓ Access
+                            âœ“ Access
                         </span>
                     )}
                 </div>
@@ -2179,7 +2179,7 @@ return (
                     }}
                 >
                     {language === "hi"
-                        ? "आधिकारिक सरकारी स्रोत"
+                        ? "à¤†à¤§à¤¿à¤•à¤¾à¤°à¤¿à¤• à¤¸à¤°à¤•à¤¾à¤°à¥€ à¤¸à¥à¤°à¥‹à¤¤"
                         : "Official Government Sources"}
                 </h2>
 
@@ -2192,7 +2192,7 @@ return (
                     }}
                 >
                     {language === "hi"
-                        ? "Muni48 एक स्वतंत्र शैक्षिक प्लेटफॉर्म है। इसका UPSC, BPSC या किसी सरकारी संस्था से कोई आधिकारिक संबंध, समर्थन या प्रतिनिधित्व नहीं है। सरकारी सूचनाओं और अधिसूचनाओं की पुष्टि संबंधित आधिकारिक सरकारी वेबसाइट से करें।"
+                        ? "Muni48 à¤à¤• à¤¸à¥à¤µà¤¤à¤‚à¤¤à¥à¤° à¤¶à¥ˆà¤•à¥à¤·à¤¿à¤• à¤ªà¥à¤²à¥‡à¤Ÿà¤«à¥‰à¤°à¥à¤® à¤¹à¥ˆà¥¤ à¤‡à¤¸à¤•à¤¾ UPSC, BPSC à¤¯à¤¾ à¤•à¤¿à¤¸à¥€ à¤¸à¤°à¤•à¤¾à¤°à¥€ à¤¸à¤‚à¤¸à¥à¤¥à¤¾ à¤¸à¥‡ à¤•à¥‹à¤ˆ à¤†à¤§à¤¿à¤•à¤¾à¤°à¤¿à¤• à¤¸à¤‚à¤¬à¤‚à¤§, à¤¸à¤®à¤°à¥à¤¥à¤¨ à¤¯à¤¾ à¤ªà¥à¤°à¤¤à¤¿à¤¨à¤¿à¤§à¤¿à¤¤à¥à¤µ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤ à¤¸à¤°à¤•à¤¾à¤°à¥€ à¤¸à¥‚à¤šà¤¨à¤¾à¤“à¤‚ à¤”à¤° à¤…à¤§à¤¿à¤¸à¥‚à¤šà¤¨à¤¾à¤“à¤‚ à¤•à¥€ à¤ªà¥à¤·à¥à¤Ÿà¤¿ à¤¸à¤‚à¤¬à¤‚à¤§à¤¿à¤¤ à¤†à¤§à¤¿à¤•à¤¾à¤°à¤¿à¤• à¤¸à¤°à¤•à¤¾à¤°à¥€ à¤µà¥‡à¤¬à¤¸à¤¾à¤‡à¤Ÿ à¤¸à¥‡ à¤•à¤°à¥‡à¤‚à¥¤"
                         : "Muni48 is an independent educational platform. It is not affiliated with, endorsed by, or representing UPSC, BPSC, or any government entity. Verify government information and notifications through the relevant official government websites."}
                 </p>
 
@@ -2405,7 +2405,7 @@ return (
                             >
                                 <option value="">
                                     {language === "hi"
-                                        ? "सभी श्रेणियाँ"
+                                        ? "à¤¸à¤­à¥€ à¤¶à¥à¤°à¥‡à¤£à¤¿à¤¯à¤¾à¤"
                                         : "All Categories"}
                                 </option>
 
@@ -2525,7 +2525,7 @@ return (
                         fontWeight: 600,
                     }}
                 >
-                    {paymentLoading ? "💳 " : "ℹ️ "}
+                    {paymentLoading ? "ðŸ’³ " : "â„¹ï¸ "}
                     {paymentMessage}
                 </div>
             )}
@@ -2545,7 +2545,7 @@ return (
                 >
                     <strong>
                         {language === "hi"
-                            ? "News लोड नहीं हो सके"
+                            ? "News à¤²à¥‹à¤¡ à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¥‡"
                             : "News could not be loaded"}
                     </strong>
 
@@ -2571,7 +2571,7 @@ return (
                         }}
                     >
                         {language === "hi"
-                            ? "दोबारा प्रयास करें"
+                            ? "à¤¦à¥‹à¤¬à¤¾à¤°à¤¾ à¤ªà¥à¤°à¤¯à¤¾à¤¸ à¤•à¤°à¥‡à¤‚"
                             : "Retry"}
                     </button>
                 </div>
@@ -2753,7 +2753,7 @@ return (
                                                 }}
                                             >
                                                 {article.source &&
-                                                    `${article.source} • `}
+                                                    `${article.source} â€¢ `}
 
                                                 {formatDate(
                                                     article.published_at
@@ -2992,7 +2992,7 @@ return (
                                         selectedArticle.category ||
                                         "General"
                                     }{" "}
-                                    •{" "}
+                                    â€¢{" "}
                                     {
                                         selectedArticle.exam ||
                                         exam
@@ -3034,7 +3034,7 @@ return (
                                         0,
                                 }}
                             >
-                                ×
+                                Ã—
                             </button>
                         </div>
 
@@ -3223,7 +3223,7 @@ return (
                                 >
                                     {language ===
                                     "hi"
-                                        ? "MCQ फिर से Generate करें"
+                                        ? "MCQ à¤«à¤¿à¤° à¤¸à¥‡ Generate à¤•à¤°à¥‡à¤‚"
                                         : "Retry MCQs"}
                                 </button>
                             </div>
@@ -3280,7 +3280,7 @@ return (
                                     >
                                         {language ===
                                         "hi"
-                                            ? "हिंदी"
+                                            ? "à¤¹à¤¿à¤‚à¤¦à¥€"
                                             : "English"}
                                     </span>
                                 </div>
@@ -3522,7 +3522,7 @@ return (
                                 "nowrap",
                         }}
                     >
-                        💳 ₹1 News Access
+                        ðŸ’³ â‚¹1 News Access
                         Payment
                     </div>
                 </div>
@@ -3530,6 +3530,3 @@ return (
         </div>
     );
 }
-
-
-
