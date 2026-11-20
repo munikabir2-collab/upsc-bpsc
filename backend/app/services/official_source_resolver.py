@@ -9,7 +9,7 @@ import re
 from difflib import SequenceMatcher
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 from dotenv import load_dotenv
@@ -428,6 +428,68 @@ class _ArticleParser(HTMLParser):
             self.text_parts.append(value)
 
 
+class _PIBArticleParser(HTMLParser):
+
+    TARGET_IDS = {
+        "Titleh2",
+        "MinistryName",
+        "PrDateTime",
+        "pibReleaseBody",
+        "ReleaseId",
+    }
+
+    VOID_TAGS = {
+        "area", "base", "br", "col", "embed", "hr",
+        "img", "input", "link", "meta", "param",
+        "source", "track", "wbr",
+    }
+
+    def __init__(self):
+        super().__init__()
+        self.fields = {
+            key: [] for key in self.TARGET_IDS
+        }
+        self.active = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+
+        for item in self.active:
+            if tag not in self.VOID_TAGS:
+                item["depth"] += 1
+
+        element_id = attrs.get("id")
+
+        if element_id in self.TARGET_IDS:
+            self.active.append({
+                "id": element_id,
+                "tag": tag,
+                "depth": 1,
+            })
+
+    def handle_endtag(self, tag):
+        completed = []
+
+        for item in self.active:
+            if tag not in self.VOID_TAGS:
+                item["depth"] -= 1
+
+            if item["depth"] <= 0 and item["tag"] == tag:
+                completed.append(item)
+
+        for item in completed:
+            self.active.remove(item)
+
+    def handle_data(self, data):
+        value = data.strip()
+
+        if not value:
+            return
+
+        for item in self.active:
+            self.fields[item["id"]].append(value)
+
+
 # ============================================================
 # TEXT NORMALIZATION
 # ============================================================
@@ -836,92 +898,93 @@ async def _fetch_pib_article(
     if not prid.isdigit():
         return None
 
-    outer_url = (
-        f"{PIB_BASE_URL}PressReleaseDetail.aspx"
-        f"?PRID={prid}&reg=48&lang=1"
+    # Direct article endpoint. The Detail.aspx page is only
+    # a JavaScript shell and does not expose the iframe src.
+    article_url = (
+        f"{PIB_BASE_URL}PressReleasePage.aspx"
+        f"?PRID={prid}"
     )
-
-    outer_response = await _safe_get(
-        client,
-        outer_url,
-        pib_only=True,
-    )
-
-    if outer_response is None:
-        return None
-
-    frame_parser = _FrameParser()
-
-    frame_parser.feed(
-        outer_response.text
-    )
-
-    if not frame_parser.frame_src:
-
-        logger.warning(
-            "PIB iframe not found for PRID %s",
-            prid,
-        )
-
-        return None
-
-    iframe_url = urljoin(
-        str(outer_response.url),
-        frame_parser.frame_src,
-    )
-
-    if not _is_pib_url(iframe_url):
-        return None
 
     article_response = await _safe_get(
         client,
-        iframe_url,
+        article_url,
         pib_only=True,
     )
 
     if article_response is None:
         return None
 
-    parser = _ArticleParser()
+    final_url = str(article_response.url)
+
+    if not _is_pib_url(final_url):
+        logger.warning(
+            "PIB article redirected outside PIB domain: %s",
+            final_url,
+        )
+        return None
+
+    parser = _PIBArticleParser()
 
     parser.feed(
         article_response.text[:MAX_RESPONSE_BYTES]
     )
+    parser.close()
 
-    title = " ".join(
-        parser.title_parts
-    ).strip()
+    def field_text(field_name: str) -> str:
+        return " ".join(
+            parser.fields[field_name]
+        ).strip()
 
-    page_text = " ".join(
-        parser.text_parts
-    ).strip()
+    title = field_text("Titleh2")
+    ministry = field_text("MinistryName")
+    posted_on = " ".join(
+        field_text("PrDateTime").split()
+    )
 
-    if len(page_text) > MAX_PAGE_CHARS:
-        page_text = page_text[-MAX_PAGE_CHARS:]
+    if posted_on.lower().startswith("posted on:"):
+        posted_on = posted_on.split(":", 1)[1].strip()
+    body = field_text("pibReleaseBody")
+    release_id_text = field_text("ReleaseId")
 
-    if len(page_text) < 150:
+    release_digits = "".join(
+        char for char in release_id_text
+        if char.isdigit()
+    )
 
+    # Never accept a different PIB release.
+    if release_digits != prid:
         logger.warning(
-            "PIB article content too short for PRID %s",
+            "PIB Release ID mismatch: requested=%s received=%s",
+            prid,
+            release_id_text,
+        )
+        return None
+
+    if not title or len(body) < 150:
+        logger.warning(
+            "PIB article content incomplete for PRID %s",
             prid,
         )
-
         return None
 
-    final_url = str(
-        article_response.url
+    if len(body) > MAX_PAGE_CHARS:
+        body = body[:MAX_PAGE_CHARS]
+
+    article_text = (
+        f"Page title: {title}\n"
+        f"Ministry: {ministry}\n"
+        f"Posted on: {posted_on}\n"
+        f"Release ID: {prid}\n"
+        f"Article content:\n{body}"
     )
 
-    if not _is_pib_url(final_url):
-        return None
-
-    return (
-        final_url,
-        (
-            f"Page title: {title}\n"
-            f"Article content:\n{page_text}"
-        ),
+    logger.info(
+        "PIB article fetched successfully: PRID=%s title=%s",
+        prid,
+        title[:120],
     )
+
+    return final_url, article_text
 
 
 # ============================================================

@@ -56,6 +56,10 @@ class CurrentAffair(Base):
         String(1000),
         nullable=True,
     )
+    official_source_checked_at = Column(
+        DateTime,
+        nullable=True,
+    )
     source = Column(
         String(200),
         nullable=True,

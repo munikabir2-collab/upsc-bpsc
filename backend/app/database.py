@@ -69,8 +69,8 @@ def create_tables():
 
 def add_official_source_url_column():
     """
-    Safely add official_source_url to current_affairs
-    without deleting or modifying existing records.
+    Safely add official source cache columns.
+    Existing records are preserved.
     """
 
     inspector = inspect(engine)
@@ -87,20 +87,20 @@ def add_official_source_url_column():
         for column in inspector.get_columns("current_affairs")
     }
 
-    if "official_source_url" in columns:
-        print(
-            "official_source_url column already exists."
-        )
-        return
+    additions = {
+        "official_source_url": "VARCHAR(1000)",
+        "official_source_checked_at": "TIMESTAMP",
+    }
 
     with engine.begin() as connection:
-        connection.execute(
-            text(
-                "ALTER TABLE current_affairs "
-                "ADD COLUMN official_source_url VARCHAR(1000)"
-            )
-        )
-
-    print(
-        "official_source_url column added successfully."
-    )
+        for column_name, column_type in additions.items():
+            if column_name not in columns:
+                connection.execute(
+                    text(
+                        f"ALTER TABLE current_affairs "
+                        f"ADD COLUMN {column_name} {column_type}"
+                    )
+                )
+                print(f"{column_name} column added successfully.")
+            else:
+                print(f"{column_name} column already exists.")

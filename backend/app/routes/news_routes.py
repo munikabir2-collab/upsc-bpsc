@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from app.services.official_source_resolver import resolve_official_source
 from fastapi import (
@@ -1101,6 +1101,9 @@ def _upsert_current_affair(
             )
             or None
         ),
+        "official_source_checked_at": (
+            article.get("official_source_checked_at")
+        ),
 
         "source":
             _clean_text(
@@ -1262,6 +1265,7 @@ def _upsert_current_affair(
                 field in {
                     "title",
                     "official_source_url",
+                    "official_source_checked_at",
                 }
                 and not value
             ):
@@ -1752,50 +1756,98 @@ async def _search_news_internal(
 
             # --------------------------------------------
             # OFFICIAL SOURCE RESOLUTION
-            # --------------------------------------------
+            # Never trust an incoming official URL without verification.
+            # Only reuse a previously verified database URL or a fresh
+            # resolver result.
+            article["official_source_url"] = None
+            article_url = _clean_text(
+                article.get("url")
+            )
 
-            if (
-                not _clean_text(
-                    article.get("official_source_url")
+            existing_source_record = None
+
+            if article_url:
+                existing_source_record = (
+                    db.query(CurrentAffair)
+                    .filter(CurrentAffair.url == article_url)
+                    .first()
                 )
-                and official_source_checks
-                < max_official_source_checks
+
+            # Reuse a previously verified official URL.
+            if (
+                existing_source_record
+                and _clean_text(
+                    existing_source_record.official_source_url
+                )
             ):
+                article["official_source_url"] = (
+                    existing_source_record.official_source_url
+                )
 
-                official_source_checks += 1
+                article["official_source_checked_at"] = (
+                    existing_source_record.official_source_checked_at
+                    or datetime.utcnow()
+                )
 
-                try:
+            else:
+                checked_at = (
+                    existing_source_record.official_source_checked_at
+                    if existing_source_record
+                    else None
+                )
 
-                    official_url = await resolve_official_source(
-                        article
-                    )
+                if checked_at and checked_at.tzinfo is not None:
+                    checked_at = checked_at.replace(tzinfo=None)
 
-                    if official_url:
+                cache_is_fresh = (
+                    checked_at is not None
+                    and datetime.utcnow() - checked_at
+                    < timedelta(days=7)
+                )
 
-                        article["official_source_url"] = (
-                            official_url
+                if (
+                    article_url
+                    and not cache_is_fresh
+                    and official_source_checks
+                    < max_official_source_checks
+                ):
+                    official_source_checks += 1
+
+                    try:
+                        official_url = await resolve_official_source(
+                            article
                         )
 
-                        logger.info(
-                            "Verified official source found: %s",
+                        if official_url:
+                            article["official_source_url"] = (
+                                official_url
+                            )
+
+                            logger.info(
+                                "Verified official source found: %s",
+                                article.get("title", "Unknown"),
+                            )
+                        else:
+                            logger.info(
+                                "No verified official source: %s",
+                                article.get("title", "Unknown"),
+                            )
+
+                    except Exception:
+                        logger.exception(
+                            "Official source resolver failed: %s",
                             article.get("title", "Unknown"),
                         )
 
-                    else:
-
-                        logger.info(
-                            "No verified official source: %s",
-                            article.get("title", "Unknown"),
+                    finally:
+                        # Cache successful and unsuccessful attempts.
+                        article["official_source_checked_at"] = (
+                            datetime.utcnow()
                         )
 
-                except Exception:
+                elif cache_is_fresh:
+                    article["official_source_checked_at"] = checked_at
 
-                    logger.exception(
-                        "Official source resolver failed: %s",
-                        article.get("title", "Unknown"),
-                    )
-
-            # --------------------------------------------
             # SAVE ARTICLE
             # --------------------------------------------
 
