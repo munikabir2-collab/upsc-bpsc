@@ -1,4 +1,4 @@
-
+﻿
 from __future__ import annotations
 
 import asyncio
@@ -8,6 +8,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from difflib import SequenceMatcher
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -41,8 +42,14 @@ PIB_BASE_URL = "https://www.pib.gov.in/"
 
 # English and Hindi PIB archives
 PIB_ALL_RELEASES_URLS = (
-    ("1", "https://www.pib.gov.in/AllRelease.aspx?lang=1&reg=1"),
-    ("2", "https://www.pib.gov.in/AllRelease.aspx?lang=2&reg=1"),
+    (
+        "1",
+        "https://www.pib.gov.in/AllRelease.aspx?lang=1&reg=48",
+    ),
+    (
+        "2",
+        "https://www.pib.gov.in/AllReleasem.aspx?lang=2&reg=48",
+    ),
 )
 
 PIB_LINKS_FILE = (
@@ -244,7 +251,7 @@ def _extract_json(content: str) -> dict:
 class _ReleaseListParser(HTMLParser):
 
     def __init__(self):
-        super().__init__()
+        super().__init__(convert_charrefs=True)
 
         self.releases = []
         self.href = None
@@ -252,52 +259,87 @@ class _ReleaseListParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
 
-        if tag != "a":
+        if tag.lower() != "a":
             return
 
         attrs = dict(attrs)
 
-        href = attrs.get("href", "")
+        href = str(
+            attrs.get("href") or ""
+        ).strip()
 
         if not href:
             return
 
-        if "PressReleseDetail.aspx" not in href:
+        href_lower = href.lower()
+
+        if "pressrelesedetail" not in href_lower:
             return
 
         self.href = href
         self.title_parts = []
 
-        title = attrs.get("title", "")
+        title = str(
+            attrs.get("title") or ""
+        ).strip()
 
         if title:
             self.title_parts.append(title)
 
     def handle_data(self, data):
 
-        if self.href:
-            value = data.strip()
+        if self.href is None:
+            return
 
-            if value:
-                self.title_parts.append(value)
+        value = " ".join(
+            str(data or "").split()
+        )
+
+        if value:
+            self.title_parts.append(value)
+
+    def handle_entityref(self, name):
+
+        if self.href is None:
+            return
+
+        from html import unescape
+
+        value = unescape(f"&{name};").strip()
+
+        if value:
+            self.title_parts.append(value)
+
+    def handle_charref(self, name):
+
+        if self.href is None:
+            return
+
+        from html import unescape
+
+        value = unescape(f"&#{name};").strip()
+
+        if value:
+            self.title_parts.append(value)
 
     def handle_endtag(self, tag):
 
-        if tag == "a" and self.href:
+        if tag.lower() != "a" or self.href is None:
+            return
 
-            title = " ".join(
-                self.title_parts
-            ).strip()
+        title = " ".join(
+            self.title_parts
+        ).strip()
+
+        if title:
 
             self.releases.append({
                 "title": title,
                 "url": self.href,
             })
 
-            self.href = None
-            self.title_parts = []
-
-
+        self.href = None
+        self.title_parts = []
 # ============================================================
 # PIB IFRAME PARSER
 # ============================================================
@@ -378,14 +420,17 @@ class _ArticleParser(HTMLParser):
             self.text_parts.append(value)
 
 
+
 class _PIBArticleParser(HTMLParser):
 
     TARGET_IDS = {
-        "Titleh2",
-        "MinistryName",
-        "PrDateTime",
-        "pibReleaseBody",
-        "ReleaseId",
+        "titleh2": "Titleh2",
+        "ministryname": "MinistryName",
+        "prdatetime": "PrDateTime",
+        "pibreleasebody": "pibReleaseBody",
+        "ltrdescriptionn": "DescriptionHtml",
+        "pdfdiv": "PdfDiv",
+        "releaseid": "ReleaseId",
     }
 
     VOID_TAGS = {
@@ -395,10 +440,10 @@ class _PIBArticleParser(HTMLParser):
     }
 
     def __init__(self):
-        super().__init__()
+        super().__init__(convert_charrefs=True)
 
         self.fields = {
-            key: [] for key in self.TARGET_IDS
+            value: [] for value in self.TARGET_IDS.values()
         }
 
         self.active = []
@@ -411,11 +456,21 @@ class _PIBArticleParser(HTMLParser):
             if tag not in self.VOID_TAGS:
                 item["depth"] += 1
 
-        element_id = attrs.get("id")
+        element_id = str(attrs.get("id") or "").strip()
 
-        if element_id in self.TARGET_IDS:
+        normalized_id = element_id.rsplit("_", 1)[-1].lower()
+
+        field_name = self.TARGET_IDS.get(normalized_id)
+
+        if field_name == "DescriptionHtml" and tag.lower() == "input":
+            value = attrs.get("value") or ""
+            if value:
+                self.fields[field_name].append(str(value))
+            return
+
+        if field_name:
             self.active.append({
-                "id": element_id,
+                "id": field_name,
                 "tag": tag,
                 "depth": 1,
             })
@@ -440,7 +495,7 @@ class _PIBArticleParser(HTMLParser):
 
     def handle_data(self, data):
 
-        value = data.strip()
+        value = " ".join(str(data or "").split())
 
         if not value:
             return
@@ -869,107 +924,178 @@ async def _fetch_pib_article(
     language: str = "1",
 ) -> tuple[str, str] | None:
 
-    if not prid.isdigit():
+    if not str(prid).isdigit():
         return None
 
     if language not in {"1", "2"}:
         return None
 
-    article_url = (
-        f"{PIB_BASE_URL}PressReleasePage.aspx"
-        f"?PRID={prid}&reg=48&lang={language}"
-    )
+    if language == "2":
 
-    article_response = await _safe_get(
-        client,
-        article_url,
-        pib_only=True,
-    )
-
-    if article_response is None:
-        return None
-
-    final_url = str(article_response.url)
-
-    if not _is_pib_url(final_url):
-
-        logger.warning(
-            "PIB article redirected outside PIB domain: %s",
-            final_url,
+        article_url = (
+            f"{PIB_BASE_URL}PressReleseDetailm.aspx"
+            f"?PRID={prid}&reg=48&lang=2"
         )
 
-        return None
+    else:
 
-    parser = _PIBArticleParser()
-
-    parser.feed(
-        article_response.text[:MAX_RESPONSE_BYTES]
-    )
-
-    parser.close()
-
-    def field_text(field_name: str) -> str:
-        return " ".join(
-            parser.fields[field_name]
-        ).strip()
-
-    title = field_text("Titleh2")
-    ministry = field_text("MinistryName")
-
-    posted_on = " ".join(
-        field_text("PrDateTime").split()
-    )
-
-    if posted_on.lower().startswith("posted on:"):
-        posted_on = posted_on.split(":", 1)[1].strip()
-
-    body = field_text("pibReleaseBody")
-    release_id_text = field_text("ReleaseId")
-
-    release_digits = "".join(
-        char for char in release_id_text
-        if char.isdigit()
-    )
-
-    if release_digits != prid:
-
-        logger.warning(
-            "PIB Release ID mismatch: requested=%s received=%s",
-            prid,
-            release_id_text,
+        article_url = (
+            f"{PIB_BASE_URL}PressReleasePage.aspx"
+            f"?PRID={prid}&reg=48&lang=1"
         )
 
-        return None
+    try:
 
-    if not title or len(body) < 150:
-
-        logger.warning(
-            "PIB article content incomplete for PRID %s",
-            prid,
+        article_response = await _safe_get(
+            client,
+            article_url,
+            pib_only=True,
         )
 
-        return None
+        if article_response is None:
+            logger.warning(
+                "PIB article unavailable: PRID=%s language=%s",
+                prid,
+                language,
+            )
+            return None
 
-    if len(body) > MAX_PAGE_CHARS:
+        final_url = str(article_response.url)
+
+        if not _is_pib_url(final_url):
+
+            logger.warning(
+                "PIB article URL validation failed: %s",
+                final_url,
+            )
+
+            return None
+
+        parser = _PIBArticleParser()
+
+        parser.feed(
+            article_response.text[:MAX_RESPONSE_BYTES]
+        )
+
+        parser.close()
+
+        def field_text(field_name: str) -> str:
+
+            return " ".join(
+                parser.fields.get(field_name, [])
+            ).strip()
+
+        title = field_text("Titleh2")
+
+        ministry = field_text("MinistryName")
+
+        posted_on = " ".join(
+            field_text("PrDateTime").split()
+        )
+
+        if posted_on.lower().startswith("posted on:"):
+
+            posted_on = posted_on.split(
+                ":",
+                1,
+            )[1].strip()
+
+        # PIB stores the complete article in an HTML-encoded
+        # hidden input on some Hindi and English release pages.
+        description_html = unescape(
+            field_text("DescriptionHtml")
+        )
+
+        body = ""
+
+        if description_html:
+            body_parser = _PIBArticleParser()
+            body_parser.feed(
+                '<div id="pibReleaseBody">'
+                + description_html
+                + '</div>'
+            )
+            body_parser.close()
+
+            body = " ".join(
+                body_parser.fields.get("pibReleaseBody", [])
+            ).strip()
+
+        # Fallback for PIB layouts that expose article text
+        # inside the hidden PDF/print container.
+        if len(body) < 150:
+            body = field_text("PdfDiv")
+
+        # Keep support for older PIB page layouts.
+        if len(body) < 150:
+            body = field_text("pibReleaseBody")
+
+        release_id_text = field_text("ReleaseId")
+
+        release_digits = "".join(
+            char
+            for char in release_id_text
+            if char.isdigit()
+        )
+
+        # Fallback for PIB layouts where Release ID
+        # is visible as ordinary page text.
+        if not release_digits:
+            release_match = re.search(
+                r"(?:Official\s+)?Release\s*ID\s*[:?]?\s*(\d+)",
+                article_response.text,
+                flags=re.IGNORECASE,
+            )
+
+            if release_match:
+                release_digits = release_match.group(1)
+                release_id_text = release_match.group(0)
+
+        if release_digits != str(prid):
+            logger.warning(
+                "PIB Release ID mismatch: requested=%s received=%s",
+                prid,
+                release_id_text,
+            )
+            return None
+
+        if not title or len(body) < 150:
+
+            logger.warning(
+                "PIB article content incomplete: PRID=%s",
+                prid,
+            )
+
+            return None
+
         body = body[:MAX_PAGE_CHARS]
 
-    article_text = (
-        f"Page title: {title}\n"
-        f"Ministry: {ministry}\n"
-        f"Posted on: {posted_on}\n"
-        f"Release ID: {prid}\n"
-        f"Article content:\n{body}"
-    )
+        article_text = (
+            f"Page title: {title}\n"
+            f"Ministry: {ministry}\n"
+            f"Posted on: {posted_on}\n"
+            f"Release ID: {prid}\n"
+            f"Article content:\n{body}"
+        )
 
-    logger.info(
-        "PIB article fetched successfully: PRID=%s language=%s title=%s",
-        prid,
-        language,
-        title[:120],
-    )
+        logger.info(
+            "PIB article fetched: PRID=%s language=%s title=%s",
+            prid,
+            language,
+            title[:120],
+        )
 
-    return final_url, article_text
+        return final_url, article_text
 
+    except Exception:
+
+        logger.exception(
+            "PIB article fetch failed: PRID=%s language=%s",
+            prid,
+            language,
+        )
+
+        return None
 
 # ============================================================
 # STRICT GROQ ARTICLE VERIFICATION
@@ -1080,16 +1206,16 @@ def _generic_domains_for_claim(
         "upsc",
         "union public service",
         "civil services examination",
-        "सिविल सेवा",
-        "संघ लोक सेवा",
+        "à¤¸à¤¿à¤µà¤¿à¤² à¤¸à¥‡à¤µà¤¾",
+        "à¤¸à¤‚à¤˜ à¤²à¥‹à¤• à¤¸à¥‡à¤µà¤¾",
     )):
         domains.append("upsc.gov.in")
 
     if any(word in text for word in (
         "bpsc",
         "bihar public service",
-        "बिहार लोक सेवा",
-        "बिहार",
+        "à¤¬à¤¿à¤¹à¤¾à¤° à¤²à¥‹à¤• à¤¸à¥‡à¤µà¤¾",
+        "à¤¬à¤¿à¤¹à¤¾à¤°",
     )):
         domains.append("bpsc.bihar.gov.in")
 
@@ -1097,9 +1223,9 @@ def _generic_domains_for_claim(
         "education",
         "school",
         "university",
-        "शिक्षा",
-        "विद्यालय",
-        "विश्वविद्यालय",
+        "à¤¶à¤¿à¤•à¥à¤·à¤¾",
+        "à¤µà¤¿à¤¦à¥à¤¯à¤¾à¤²à¤¯",
+        "à¤µà¤¿à¤¶à¥à¤µà¤µà¤¿à¤¦à¥à¤¯à¤¾à¤²à¤¯",
     )):
         domains.append("education.gov.in")
 
@@ -1107,16 +1233,16 @@ def _generic_domains_for_claim(
         "home ministry",
         "home affairs",
         "security",
-        "गृह मंत्रालय",
-        "गृह विभाग",
+        "à¤—à¥ƒà¤¹ à¤®à¤‚à¤¤à¥à¤°à¤¾à¤²à¤¯",
+        "à¤—à¥ƒà¤¹ à¤µà¤¿à¤­à¤¾à¤—",
     )):
         domains.append("mha.gov.in")
 
     if any(word in text for word in (
         "prime minister",
         "cabinet",
-        "प्रधानमंत्री",
-        "मंत्रिमंडल",
+        "à¤ªà¥à¤°à¤§à¤¾à¤¨à¤®à¤‚à¤¤à¥à¤°à¥€",
+        "à¤®à¤‚à¤¤à¥à¤°à¤¿à¤®à¤‚à¤¡à¤²",
     )):
         domains.append("pmo.gov.in")
 
@@ -1584,7 +1710,6 @@ async def _resolve_generic_official_source(
 async def resolve_official_source(
     article: dict,
 ) -> str | None:
-
     """
     Return an article-specific verified Indian government source.
 
@@ -1606,13 +1731,41 @@ async def resolve_official_source(
         return None
 
     try:
+        try:
+            extracted = await _extract_claim(article)
 
-        extracted = await _extract_claim(article)
+        except Exception:
+            logger.warning(
+                "Groq claim extraction failed; "
+                "using article text fallback: %s",
+                article_title[:120],
+                exc_info=True,
+            )
+            extracted = {}
 
-        if not extracted:
-            return None
+        if not isinstance(extracted, dict):
+            extracted = {}
 
-        claim = extracted["claim"]
+        claim = str(
+            extracted.get("claim") or ""
+        ).strip()
+
+        if not claim:
+            description = str(
+                article.get("description")
+                or article.get("content")
+                or ""
+            ).strip()
+
+            claim = (
+                article_title + "\n" + description
+            ).strip()[:1500]
+
+            logger.info(
+                "Groq claim unavailable; "
+                "using article text for strict verification: %s",
+                article_title[:120],
+            )
 
         timeout = httpx.Timeout(
             timeout=REQUEST_TIMEOUT,
@@ -1637,9 +1790,7 @@ async def resolve_official_source(
             max_redirects=0,
         ) as client:
 
-            # ------------------------------------------------
             # FIRST: PIB ENGLISH + HINDI ARCHIVES
-            # ------------------------------------------------
 
             live_releases = await _fetch_live_releases(
                 client
@@ -1669,7 +1820,6 @@ async def resolve_official_source(
                 )
 
             else:
-
                 for candidate in candidates:
 
                     pib_article = await _fetch_pib_article(
@@ -1691,7 +1841,6 @@ async def resolve_official_source(
                     )
 
                     if matched:
-
                         logger.info(
                             "Verified PIB source "
                             "PRID=%s language=%s",
@@ -1701,9 +1850,7 @@ async def resolve_official_source(
 
                         return official_url
 
-            # ------------------------------------------------
             # SECOND: GENERIC OFFICIAL GOVERNMENT SOURCES
-            # ------------------------------------------------
 
             generic_url = await _resolve_generic_official_source(
                 client=client,
@@ -1711,7 +1858,10 @@ async def resolve_official_source(
                 claim=claim,
             )
 
-            if generic_url and _is_official_domain(generic_url):
+            if (
+                generic_url
+                and _is_official_domain(generic_url)
+            ):
                 return generic_url
 
         logger.info(
@@ -1722,9 +1872,7 @@ async def resolve_official_source(
         return None
 
     except Exception:
-
         logger.exception(
             "Official source resolver failed"
         )
-
         return None

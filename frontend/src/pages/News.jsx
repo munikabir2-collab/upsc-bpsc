@@ -4,7 +4,7 @@ import React, {
     useRef,
     useState,
 } from "react";
-
+import { ArticleSourceLinks } from "../components/OfficialSources";
 /*
 |--------------------------------------------------------------------------
 | MUNI48 - NEWS / CURRENT AFFAIRS
@@ -2736,7 +2736,7 @@ return (
                                                 {article.description}
                                             </p>
                                         )}
-
+                                        <ArticleSourceLinks article={article} />
                                         <div
                                             style={{
                                                 display: "flex",
