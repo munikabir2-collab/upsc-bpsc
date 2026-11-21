@@ -15,7 +15,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from dotenv import load_dotenv
-from groq import AsyncGroq
+from groq import AsyncGroq, RateLimitError
 
 
 # ============================================================
@@ -66,9 +66,9 @@ REQUEST_TIMEOUT = 20.0
 
 MAX_RESPONSE_BYTES = 2_000_000
 
-MAX_PAGE_CHARS = 10000
+MAX_PAGE_CHARS = 4000
 
-MAX_PIB_CANDIDATES = 8
+MAX_PIB_CANDIDATES = 2
 
 MIN_TITLE_SCORE = 0.38
 
@@ -859,7 +859,7 @@ async def _extract_claim(
     response = await client.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0,
-        max_completion_tokens=1024,
+        max_completion_tokens=256,
         reasoning_effort="low",
         include_reasoning=False,
         response_format={
@@ -1123,7 +1123,7 @@ async def _verify_pib_article(
     result = await groq.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0,
-        max_completion_tokens=2048,
+        max_completion_tokens=512,
         reasoning_effort="low",
         include_reasoning=False,
         response_format={
@@ -1186,7 +1186,7 @@ OFFICIAL_SITEMAP_DOMAINS = (
 MAX_SITEMAP_BYTES = 2_000_000
 MAX_SITEMAP_FILES = 4
 MAX_SITEMAP_URLS = 500
-MAX_GENERIC_CANDIDATES = 5
+MAX_GENERIC_CANDIDATES = 1
 
 
 def _generic_domains_for_claim(
@@ -1531,7 +1531,7 @@ async def _verify_generic_official_page(
     result = await groq.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0,
-        max_completion_tokens=1024,
+        max_completion_tokens=256,
         reasoning_effort="low",
         include_reasoning=False,
         response_format={
@@ -1734,6 +1734,9 @@ async def resolve_official_source(
         try:
             extracted = await _extract_claim(article)
 
+        except RateLimitError:
+            raise
+
         except Exception:
             logger.warning(
                 "Groq claim extraction failed; "
@@ -1870,6 +1873,12 @@ async def resolve_official_source(
         )
 
         return None
+
+    except RateLimitError:
+        logger.warning(
+            "Groq rate limit reached; source check will be retried later"
+        )
+        raise
 
     except Exception:
         logger.exception(

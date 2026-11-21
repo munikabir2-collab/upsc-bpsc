@@ -1748,7 +1748,7 @@ async def _search_news_internal(
     saved_articles = []
 
     official_source_checks = 0
-    max_official_source_checks = 5
+    max_official_source_checks = 1
 
     for article in paginated:
 
@@ -1812,11 +1812,13 @@ async def _search_news_internal(
                     < max_official_source_checks
                 ):
                     official_source_checks += 1
+                    official_source_attempt_completed = False
 
                     try:
                         official_url = await resolve_official_source(
                             article
                         )
+                        official_source_attempt_completed = True
 
                         if official_url:
                             article["official_source_url"] = (
@@ -1840,10 +1842,11 @@ async def _search_news_internal(
                         )
 
                     finally:
-                        # Cache successful and unsuccessful attempts.
-                        article["official_source_checked_at"] = (
-                            datetime.utcnow()
-                        )
+                        # Do not cache transient failures such as Groq 429.
+                        if official_source_attempt_completed:
+                            article["official_source_checked_at"] = (
+                                datetime.utcnow()
+                            )
 
                 elif cache_is_fresh:
                     article["official_source_checked_at"] = checked_at
