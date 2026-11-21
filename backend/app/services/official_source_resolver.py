@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import xml.etree.ElementTree as ET
 from difflib import SequenceMatcher
 from html.parser import HTMLParser
 from pathlib import Path
@@ -20,7 +21,7 @@ from groq import AsyncGroq
 # ENVIRONMENT
 # ============================================================
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 logger = logging.getLogger("muni48.official_source_resolver")
 
@@ -106,6 +107,8 @@ def _is_official_domain(url: str) -> bool:
 
         if parsed.scheme != "https":
             return False
+        if parsed.port not in (None, 443):
+           return False
 
         if not host:
             return False
@@ -1041,7 +1044,541 @@ async def _verify_pib_article(
 
 
 # ============================================================
+# GENERIC OFFICIAL GOVERNMENT SOURCE FALLBACK
+# No Tavily or additional API key required.
+# ============================================================
+
+OFFICIAL_SITEMAP_DOMAINS = (
+    "upsc.gov.in",
+    "bpsc.bihar.gov.in",
+    "india.gov.in",
+    "education.gov.in",
+    "mha.gov.in",
+    "pmo.gov.in",
+)
+
+MAX_SITEMAP_BYTES = 2_000_000
+MAX_SITEMAP_FILES = 4
+MAX_SITEMAP_URLS = 500
+MAX_GENERIC_CANDIDATES = 5
+
+
+def _generic_domains_for_claim(
+    article: dict,
+    claim: str,
+) -> tuple[str, ...]:
+
+    text = _normalize(
+        str(article.get("title") or "")
+        + " "
+        + str(claim or "")
+    )
+
+    domains = []
+
+    if any(word in text for word in (
+        "upsc",
+        "union public service",
+        "civil services examination",
+        "सिविल सेवा",
+        "संघ लोक सेवा",
+    )):
+        domains.append("upsc.gov.in")
+
+    if any(word in text for word in (
+        "bpsc",
+        "bihar public service",
+        "बिहार लोक सेवा",
+        "बिहार",
+    )):
+        domains.append("bpsc.bihar.gov.in")
+
+    if any(word in text for word in (
+        "education",
+        "school",
+        "university",
+        "शिक्षा",
+        "विद्यालय",
+        "विश्वविद्यालय",
+    )):
+        domains.append("education.gov.in")
+
+    if any(word in text for word in (
+        "home ministry",
+        "home affairs",
+        "security",
+        "गृह मंत्रालय",
+        "गृह विभाग",
+    )):
+        domains.append("mha.gov.in")
+
+    if any(word in text for word in (
+        "prime minister",
+        "cabinet",
+        "प्रधानमंत्री",
+        "मंत्रिमंडल",
+    )):
+        domains.append("pmo.gov.in")
+
+    # General government information fallback.
+    if not domains:
+        domains.append("india.gov.in")
+
+    # Preserve order and remove duplicates.
+    return tuple(dict.fromkeys(domains))
+
+
+async def _safe_get_sitemap(
+    client: httpx.AsyncClient,
+    url: str,
+) -> httpx.Response | None:
+
+    current_url = url
+
+    for _ in range(5):
+
+        parsed = urlparse(current_url)
+
+        if not _is_official_domain(current_url):
+            return None
+
+        if parsed.port not in (None, 443):
+            return None
+
+        try:
+            response = await client.get(
+                current_url,
+                follow_redirects=False,
+            )
+
+            if response.status_code in (
+                301, 302, 303, 307, 308
+            ):
+                location = response.headers.get("location")
+
+                if not location:
+                    return None
+
+                next_url = urljoin(
+                    str(response.url),
+                    location,
+                )
+
+                if not _is_official_domain(next_url):
+                    return None
+
+                next_parsed = urlparse(next_url)
+
+                if next_parsed.port not in (None, 443):
+                    return None
+
+                current_url = next_url
+                continue
+
+            response.raise_for_status()
+
+            if len(response.content) > MAX_SITEMAP_BYTES:
+                return None
+
+            content_type = response.headers.get(
+                "content-type", ""
+            ).lower()
+
+            if not any(value in content_type for value in (
+                "xml",
+                "text/plain",
+                "octet-stream",
+            )):
+                return None
+
+            return response
+
+        except Exception:
+            logger.debug(
+                "Sitemap unavailable: %s",
+                current_url,
+                exc_info=True,
+            )
+            return None
+
+    return None
+
+
+def _extract_sitemap_locations(
+    content: bytes,
+) -> tuple[list[str], list[str]]:
+
+    sitemap_urls = []
+    page_urls = []
+
+    try:
+        root = ET.fromstring(content)
+
+        for element in root.iter():
+
+            if not element.tag.lower().endswith("loc"):
+                continue
+
+            value = (element.text or "").strip()
+
+            if not value:
+                continue
+
+            if not _is_official_domain(value):
+                continue
+
+            path = urlparse(value).path.lower()
+
+            if (
+                path.endswith(".xml")
+                or "sitemap" in path
+            ):
+                sitemap_urls.append(value)
+            else:
+                page_urls.append(value)
+
+    except Exception:
+        logger.debug(
+            "Could not parse sitemap XML",
+            exc_info=True,
+        )
+
+    return sitemap_urls, page_urls
+
+
+async def _discover_official_sitemap_urls(
+    client: httpx.AsyncClient,
+    domain: str,
+) -> list[str]:
+
+    base_url = f"https://{domain}/"
+
+    sitemap_queue = []
+    discovered_pages = []
+
+    # First discover sitemap declarations in robots.txt.
+    robots_response = await _safe_get_sitemap(
+        client,
+        urljoin(base_url, "robots.txt"),
+    )
+
+    if robots_response is not None:
+
+        for line in robots_response.text.splitlines():
+
+            if line.lower().startswith("sitemap:"):
+
+                sitemap_url = line.split(":", 1)[1].strip()
+
+                if _is_official_domain(sitemap_url):
+                    sitemap_queue.append(sitemap_url)
+
+    # Standard sitemap locations.
+    sitemap_queue.extend([
+        urljoin(base_url, "sitemap.xml"),
+        urljoin(base_url, "sitemap_index.xml"),
+    ])
+
+    visited_sitemaps = set()
+
+    while (
+        sitemap_queue
+        and len(visited_sitemaps) < MAX_SITEMAP_FILES
+        and len(discovered_pages) < MAX_SITEMAP_URLS
+    ):
+
+        sitemap_url = sitemap_queue.pop(0)
+
+        if sitemap_url in visited_sitemaps:
+            continue
+
+        visited_sitemaps.add(sitemap_url)
+
+        response = await _safe_get_sitemap(
+            client,
+            sitemap_url,
+        )
+
+        if response is None:
+            continue
+
+        nested, pages = _extract_sitemap_locations(
+            response.content
+        )
+
+        for nested_url in nested:
+
+            if (
+                nested_url not in visited_sitemaps
+                and len(visited_sitemaps)
+                + len(sitemap_queue)
+                < MAX_SITEMAP_FILES
+            ):
+                sitemap_queue.append(nested_url)
+
+        discovered_pages.extend(pages)
+    # Only URLs belonging to the domain being searched.
+    result = []
+
+    for url in discovered_pages:
+        parsed_url = urlparse(url)
+        host = (parsed_url.hostname or "").lower()
+        path = parsed_url.path.lower()
+
+        # Skip static media and frontend assets.
+        blocked_extensions = (
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+            ".svg",
+            ".ico",
+            ".avif",
+            ".css",
+            ".js",
+            ".woff",
+            ".woff2",
+            ".ttf",
+            ".eot",
+            ".mp3",
+            ".mp4",
+            ".webm",
+        )
+
+        if path.endswith(blocked_extensions):
+            continue
+
+        if host == domain or host.endswith("." + domain):
+            result.append(url)
+
+    return list(dict.fromkeys(result))[:MAX_SITEMAP_URLS]
+
+
+async def _fetch_generic_official_page(
+    client: httpx.AsyncClient,
+    url: str,
+) -> tuple[str, str] | None:
+
+    response = await _safe_get(
+        client,
+        url,
+    )
+
+    if response is None:
+        return None
+
+    parser = _ArticleParser()
+
+    try:
+        parser.feed(
+            response.text[:MAX_RESPONSE_BYTES]
+        )
+        parser.close()
+
+    except Exception:
+        return None
+
+    title = " ".join(parser.title_parts).strip()
+    body = " ".join(parser.text_parts).strip()
+
+    if not title or len(body) < 100:
+        return None
+
+    content = (
+        f"Official page title: {title}\n"
+        f"Official page URL: {response.url}\n"
+        f"Official page content:\n{body[:MAX_PAGE_CHARS]}"
+    )
+
+    return str(response.url), content
+
+
+async def _verify_generic_official_page(
+    article: dict,
+    claim: str,
+    page_content: str,
+) -> bool:
+
+    groq = await _get_groq_client()
+
+    result = await groq.chat.completions.create(
+        model=GROQ_MODEL,
+        temperature=0,
+        max_completion_tokens=1024,
+        reasoning_effort="low",
+        include_reasoning=False,
+        response_format={
+            "type": "json_object"
+        },
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a strict Indian government source verifier. "
+                    "Determine whether the supplied official government "
+                    "page directly supports the exact factual claim in "
+                    "the news article. A shared topic, ministry, person, "
+                    "or keyword is not sufficient. Do not infer missing "
+                    "facts. If the evidence is incomplete, unrelated, "
+                    "or ambiguous, return matches false. "
+                    'Return JSON only: {"matches": true} or '
+                    '{"matches": false}.'
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "NEWS TITLE:\n"
+                    + str(article.get("title") or "")[:500]
+                    + "\n\nNEWS DESCRIPTION:\n"
+                    + str(
+                        article.get("description")
+                        or article.get("content")
+                        or ""
+                    )[:1500]
+                    + "\n\nEXTRACTED GOVERNMENT CLAIM:\n"
+                    + claim[:1500]
+                    + "\n\nOFFICIAL GOVERNMENT PAGE:\n"
+                    + page_content[:MAX_PAGE_CHARS]
+                ),
+            },
+        ],
+    )
+
+    if not result.choices:
+        return False
+
+    data = _extract_json(
+        result.choices[0].message.content or "{}"
+    )
+
+    return data.get("matches") is True
+
+
+async def _resolve_generic_official_source(
+    client: httpx.AsyncClient,
+    article: dict,
+    claim: str,
+) -> str | None:
+
+    domains = _generic_domains_for_claim(
+        article,
+        claim,
+    )
+
+    article_title = str(
+        article.get("title") or ""
+    )
+
+    candidates = []
+
+    for domain in domains:
+
+        urls = await _discover_official_sitemap_urls(
+            client,
+            domain,
+        )
+
+        for url in urls:
+
+            path_text = urlparse(url).path.replace(
+                "/", " "
+            ).replace("-", " ").replace("_", " ")
+
+
+            score = max(
+                _title_score(article_title, path_text),
+                _title_score(claim, path_text),
+            )
+
+            # Prioritize official exam-calendar pages
+            # for exam-date and calendar-related news.
+            search_text = (
+                article_title + " " +
+                claim + " " +
+                str(
+                    article.get("description")
+                    or article.get("content")
+                    or ""
+                )
+            ).lower()
+
+            is_exam_calendar_news = (
+                "exam calendar" in search_text
+                or "examination calendar" in search_text
+                or "exam date" in search_text
+                or "\\u092a\\u0930\\u0940\\u0915\\u094d\\u0937\\u093e \\u0915\\u0948\\u0932\\u0947\\u0902\\u0921\\u0930" in search_text
+            )
+
+            is_exam_calendar_page = (
+                "exam-calendar" in urlparse(url).path.lower()
+                or "exam calendar" in path_text.lower()
+            )
+
+            if is_exam_calendar_news and is_exam_calendar_page:
+                score += 1.0
+
+
+            # URL slug is only used to shortlist pages.
+            # Final verification always uses page content.
+            if score >= 0.12:
+
+                candidates.append({
+                    "url": url,
+                    "score": score,
+                })
+
+    candidates.sort(
+        key=lambda item: item["score"],
+        reverse=True,
+    )
+
+    candidates = candidates[:MAX_GENERIC_CANDIDATES]
+
+    for candidate in candidates:
+
+        page = await _fetch_generic_official_page(
+            client,
+            candidate["url"],
+        )
+
+        if page is None:
+            continue
+
+        official_url, page_content = page
+
+        if not _is_official_domain(official_url):
+            continue
+
+        matched = await _verify_generic_official_page(
+            article=article,
+            claim=claim,
+            page_content=page_content,
+        )
+
+        if matched:
+
+            logger.info(
+                "Verified generic government source: %s",
+                official_url,
+            )
+
+            return official_url
+
+    logger.info(
+        "No verified generic government source found"
+    )
+
+    return None
+
+# ============================================================
 # MAIN RESOLVER
+# ============================================================
+
+# ============================================================
+# MAIN RESOLVER
+# PIB first, then verified generic official source fallback.
 # ============================================================
 
 async def resolve_official_source(
@@ -1049,13 +1586,13 @@ async def resolve_official_source(
 ) -> str | None:
 
     """
-    Return a verified article-specific PIB source URL.
+    Return an article-specific verified Indian government source.
 
-    Returns None if:
-    - No specific government claim exists.
-    - No PIB title match is found.
-    - The PIB article content cannot be extracted.
-    - Groq cannot verify the exact claim.
+    Search order:
+    1. PIB English and Hindi archives.
+    2. Bounded official government sitemap fallback.
+
+    Returns None when no exact official source is verified.
     """
 
     if not isinstance(article, dict):
@@ -1075,6 +1612,8 @@ async def resolve_official_source(
         if not extracted:
             return None
 
+        claim = extracted["claim"]
+
         timeout = httpx.Timeout(
             timeout=REQUEST_TIMEOUT,
             connect=7.0,
@@ -1086,7 +1625,8 @@ async def resolve_official_source(
                 "(compatible; Muni48SourceVerifier/1.0)"
             ),
             "Accept": (
-                "text/html,application/xhtml+xml"
+                "text/html,application/xhtml+xml,"
+                "application/xml,text/xml,text/plain"
             ),
         }
 
@@ -1096,6 +1636,10 @@ async def resolve_official_source(
             follow_redirects=False,
             max_redirects=0,
         ) as client:
+
+            # ------------------------------------------------
+            # FIRST: PIB ENGLISH + HINDI ARCHIVES
+            # ------------------------------------------------
 
             live_releases = await _fetch_live_releases(
                 client
@@ -1107,57 +1651,73 @@ async def resolve_official_source(
                 live_releases + local_releases
             )
 
-            if not combined:
-
-                logger.info(
-                    "No PIB releases available"
-                )
-
-                return None
-
             candidates = _rank_releases(
                 article_title,
                 combined,
             )
 
-            if not candidates:
-
+            if not combined:
                 logger.info(
-                    "No PIB title match: %s",
-                    article_title[:120],
+                    "No PIB releases available; "
+                    "trying generic official sources"
                 )
 
-                return None
-
-            for candidate in candidates:
-
-                pib_article = await _fetch_pib_article(
-                    client,
-                    candidate["prid"],
-                    candidate["language"],
+            elif not candidates:
+                logger.info(
+                    "No PIB title match; "
+                    "trying generic official sources"
                 )
 
-                if not pib_article:
-                    continue
+            else:
 
-                official_url, pib_content = pib_article
+                for candidate in candidates:
 
-                matched = await _verify_pib_article(
-                    article=article,
-                    claim=extracted["claim"],
-                    pib_title=candidate["title"],
-                    pib_content=pib_content,
-                )
-
-                if matched:
-
-                    logger.info(
-                        "Verified PIB source PRID=%s language=%s",
+                    pib_article = await _fetch_pib_article(
+                        client,
                         candidate["prid"],
                         candidate["language"],
                     )
 
-                    return official_url
+                    if not pib_article:
+                        continue
+
+                    official_url, pib_content = pib_article
+
+                    matched = await _verify_pib_article(
+                        article=article,
+                        claim=claim,
+                        pib_title=candidate["title"],
+                        pib_content=pib_content,
+                    )
+
+                    if matched:
+
+                        logger.info(
+                            "Verified PIB source "
+                            "PRID=%s language=%s",
+                            candidate["prid"],
+                            candidate["language"],
+                        )
+
+                        return official_url
+
+            # ------------------------------------------------
+            # SECOND: GENERIC OFFICIAL GOVERNMENT SOURCES
+            # ------------------------------------------------
+
+            generic_url = await _resolve_generic_official_source(
+                client=client,
+                article=article,
+                claim=claim,
+            )
+
+            if generic_url and _is_official_domain(generic_url):
+                return generic_url
+
+        logger.info(
+            "No exact official government source verified: %s",
+            article_title[:120],
+        )
 
         return None
 
