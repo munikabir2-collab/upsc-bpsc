@@ -61,6 +61,7 @@ PIB_LINKS_FILE = (
 ALLOWED_DOMAINS = (
     "gov.in",
     "nic.in",
+    "rbi.org.in",
 )
 
 REQUEST_TIMEOUT = 20.0
@@ -1181,12 +1182,17 @@ OFFICIAL_SITEMAP_DOMAINS = (
     "education.gov.in",
     "mha.gov.in",
     "pmo.gov.in",
+    "cag.gov.in",
+    "sebi.gov.in",
+    "rbi.org.in",
+    "sci.gov.in",
 )
 
 MAX_SITEMAP_BYTES = 2_000_000
 MAX_SITEMAP_FILES = 4
 MAX_SITEMAP_URLS = 500
 MAX_GENERIC_CANDIDATES = 1
+
 
 
 
@@ -1203,7 +1209,7 @@ def _generic_domains_for_claim(
 
     domains = []
 
-    # UPSC: require a specific UPSC-related reference.
+    # UPSC
     if any(word in text for word in (
         "upsc",
         "union public service",
@@ -1213,7 +1219,7 @@ def _generic_domains_for_claim(
     )):
         domains.append("upsc.gov.in")
 
-    # BPSC: avoid routing every Bihar-related news item to BPSC.
+    # BPSC
     if any(word in text for word in (
         "bpsc",
         "bihar public service",
@@ -1221,6 +1227,43 @@ def _generic_domains_for_claim(
     )):
         domains.append("bpsc.bihar.gov.in")
 
+    # CAG
+    if any(word in text for word in (
+        "cag",
+        "comptroller and auditor general",
+        "comptroller auditor general",
+        "नियंत्रक एवं महालेखा परीक्षक",
+        "कैग",
+    )):
+        domains.append("cag.gov.in")
+
+    # SEBI
+    if any(word in text for word in (
+        "sebi",
+        "securities and exchange board",
+        "भारतीय प्रतिभूति और विनिमय बोर्ड",
+    )):
+        domains.append("sebi.gov.in")
+
+    # RBI
+    if any(word in text for word in (
+        "rbi",
+        "reserve bank of india",
+        "भारतीय रिजर्व बैंक",
+        "भारतीय रिज़र्व बैंक",
+    )):
+        domains.append("rbi.org.in")
+
+    # Supreme Court
+    if any(word in text for word in (
+        "supreme court of india",
+        "supreme court",
+        "भारत का सर्वोच्च न्यायालय",
+        "सर्वोच्च न्यायालय",
+    )):
+        domains.append("sci.gov.in")
+
+    # Education
     if any(word in text for word in (
         "education",
         "school",
@@ -1231,6 +1274,7 @@ def _generic_domains_for_claim(
     )):
         domains.append("education.gov.in")
 
+    # Home Ministry
     if any(word in text for word in (
         "home ministry",
         "home affairs",
@@ -1240,6 +1284,7 @@ def _generic_domains_for_claim(
     )):
         domains.append("mha.gov.in")
 
+    # Prime Minister / Cabinet
     if any(word in text for word in (
         "prime minister",
         "cabinet",
@@ -1249,83 +1294,8 @@ def _generic_domains_for_claim(
         domains.append("pmo.gov.in")
 
     # Never use a generic portal as an automatic fallback.
-    # Return no domain when the responsible authority is unknown.
     return tuple(dict.fromkeys(domains))
 
-async def _safe_get_sitemap(
-    client: httpx.AsyncClient,
-    url: str,
-) -> httpx.Response | None:
-
-    current_url = url
-
-    for _ in range(5):
-
-        parsed = urlparse(current_url)
-
-        if not _is_official_domain(current_url):
-            return None
-
-        if parsed.port not in (None, 443):
-            return None
-
-        try:
-            response = await client.get(
-                current_url,
-                follow_redirects=False,
-            )
-
-            if response.status_code in (
-                301, 302, 303, 307, 308
-            ):
-                location = response.headers.get("location")
-
-                if not location:
-                    return None
-
-                next_url = urljoin(
-                    str(response.url),
-                    location,
-                )
-
-                if not _is_official_domain(next_url):
-                    return None
-
-                next_parsed = urlparse(next_url)
-
-                if next_parsed.port not in (None, 443):
-                    return None
-
-                current_url = next_url
-                continue
-
-            response.raise_for_status()
-
-            if len(response.content) > MAX_SITEMAP_BYTES:
-                return None
-
-            content_type = response.headers.get(
-                "content-type", ""
-            ).lower()
-
-            if not any(value in content_type for value in (
-                "xml",
-                "text/plain",
-                "octet-stream",
-            )):
-                return None
-
-            return response
-
-        except Exception:
-            logger.debug(
-                "Sitemap unavailable: %s",
-                current_url,
-                exc_info=True,
-            )
-            return None
-
-    return None
 
 
 def _extract_sitemap_locations(
