@@ -1,4 +1,3 @@
-
 import React from "react";
 
 export const OFFICIAL_SOURCES = [
@@ -31,7 +30,7 @@ const boxStyle = {
   padding: "10px 12px",
   margin: "10px 0",
   fontSize: 13,
-  lineHeight: 1.5,
+  lineHeight: 1.6,
   color: "#3d2f00",
 };
 
@@ -41,8 +40,42 @@ const linkStyle = {
   wordBreak: "break-all",
 };
 
+function isSafeHttpsUrl(value) {
+  if (!value || typeof value !== "string") return false;
+
+  try {
+    const parsed = new URL(value);
+
+    return (
+      parsed.protocol === "https:" &&
+      Boolean(parsed.hostname) &&
+      !parsed.username &&
+      !parsed.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isOfficialGovernmentUrl(value) {
+  if (!isSafeHttpsUrl(value)) return false;
+
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+
+    return (
+      hostname === "gov.in" ||
+      hostname.endsWith(".gov.in") ||
+      hostname === "nic.in" ||
+      hostname.endsWith(".nic.in")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function ExternalLink({ href, children }) {
-  if (!href) return null;
+  if (!isSafeHttpsUrl(href)) return null;
 
   return (
     <a
@@ -59,20 +92,27 @@ function ExternalLink({ href, children }) {
 export function DisclaimerBanner() {
   return (
     <div style={boxStyle} role="note">
-      <strong>Disclaimer:</strong> This is an independent educational app.
-      It is not affiliated with, endorsed by, or officially connected to UPSC,
-      BPSC or any government organisation. It does not represent a government
-      entity. Government information should be verified using the original
-      official source.
+      <strong>Important Disclaimer:</strong>{" "}
+      This is an independent educational application. It is not affiliated
+      with, endorsed by, or officially connected to UPSC, BPSC, PIB, or any
+      government department or organisation. It does not represent a
+      government entity.
+
+      Government-related information should always be checked against the
+      original source published by the relevant government authority.
 
       <br />
 
-      <strong>सूचना:</strong> यह एक स्वतंत्र शैक्षणिक ऐप है। यह UPSC, BPSC या
-      किसी सरकारी संस्था से संबद्ध अथवा अधिकृत नहीं है और किसी सरकारी निकाय
-      का प्रतिनिधित्व नहीं करता। सरकारी जानकारी की पुष्टि मूल आधिकारिक स्रोत
-      से करें।
+      <strong>महत्वपूर्ण सूचना:</strong>{" "}
+      यह एक स्वतंत्र शैक्षणिक ऐप है। इसका UPSC, BPSC, PIB या किसी सरकारी
+      विभाग अथवा संस्था से कोई आधिकारिक संबंध या संबद्धता नहीं है।
+      यह किसी सरकारी निकाय का प्रतिनिधित्व नहीं करता।
 
-      <div style={{ marginTop: 6 }}>
+      सरकारी जानकारी की पुष्टि संबंधित सरकारी प्राधिकरण द्वारा प्रकाशित
+      मूल स्रोत से अवश्य करें।
+
+      <div style={{ marginTop: 8 }}>
+        <strong>Official Government Portals / आधिकारिक सरकारी पोर्टल:</strong>
         <OfficialSourcesList compact />
       </div>
     </div>
@@ -90,7 +130,7 @@ export function OfficialSourcesList({ compact = false }) {
 
       <ul style={{ margin: 0, paddingLeft: 18 }}>
         {OFFICIAL_SOURCES.map((source) => (
-          <li key={source.key} style={{ margin: "2px 0" }}>
+          <li key={source.key} style={{ margin: "3px 0" }}>
             {source.name}:{" "}
             <ExternalLink href={source.url}>
               {source.url.replace("https://", "")}
@@ -105,30 +145,67 @@ export function OfficialSourcesList({ compact = false }) {
 export function ArticleSourceLinks({ article }) {
   if (!article) return null;
 
-  const publisherUrl = article.url || article.source_url || "";
-  const officialUrl = article.official_source_url || "";
+  const publisherUrl =
+    article.url || article.source_url || "";
+
+  const officialUrl =
+    article.official_source_url || "";
+
+  const hasPublisherLink =
+    isSafeHttpsUrl(publisherUrl);
+
+  const hasVerifiedOfficialLink =
+    isOfficialGovernmentUrl(officialUrl);
 
   return (
-    <div style={{ fontSize: 12, marginTop: 8, lineHeight: 1.6 }}>
-      {publisherUrl && (
+    <div
+      style={{
+        fontSize: 12,
+        marginTop: 8,
+        lineHeight: 1.7,
+        overflowWrap: "anywhere",
+      }}
+    >
+      {hasPublisherLink && (
         <div>
-          News source:{" "}
+          <strong>News Publisher Source:</strong>{" "}
           <ExternalLink href={publisherUrl}>
-            {article.source || "Original news article"}
+            {article.source || "Read original news article"}
           </ExternalLink>
         </div>
       )}
 
-      {officialUrl ? (
-        <div>
-          <strong>Verified official source:</strong>{" "}
+      {hasVerifiedOfficialLink ? (
+        <div style={{ marginTop: 5 }}>
+          <strong>
+            Verified Government Source / सत्यापित सरकारी स्रोत:
+          </strong>{" "}
           <ExternalLink href={officialUrl}>
-            {officialUrl}
+            Open original government publication
           </ExternalLink>
         </div>
       ) : (
-        <div style={{ color: "#8a4b08" }}>
-          Official source link has not been verified for this article.
+        <div
+          style={{
+            marginTop: 5,
+            padding: "7px 9px",
+            background: "#fff8e1",
+            border: "1px solid #f0c36d",
+            borderRadius: 6,
+            color: "#8a4b08",
+          }}
+        >
+          <strong>Government source not verified.</strong>
+          <br />
+          The original government publication link has not been verified
+          for this article. Do not treat this article as an officially
+          verified government announcement.
+
+          <br />
+
+          <strong>सरकारी स्रोत सत्यापित नहीं है।</strong>
+          इस लेख के लिए मूल सरकारी प्रकाशन का लिंक सत्यापित नहीं हुआ है।
+          इसे आधिकारिक रूप से सत्यापित सरकारी घोषणा न मानें।
         </div>
       )}
     </div>

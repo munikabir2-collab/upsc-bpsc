@@ -4,7 +4,11 @@ import React, {
     useRef,
     useState,
 } from "react";
-import { ArticleSourceLinks } from "../components/OfficialSources";
+
+import {
+    ArticleSourceLinks,
+    DisclaimerBanner,
+} from "../components/OfficialSources";
 /*
 |--------------------------------------------------------------------------
 | MUNI48 - NEWS / CURRENT AFFAIRS
@@ -2590,6 +2594,7 @@ return (
                     {t.loading}
                 </div>
             )}
+                                    <DisclaimerBanner />
 
             {/* EMPTY */}
 

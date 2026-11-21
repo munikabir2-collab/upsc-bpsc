@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import xml.etree.ElementTree as ET
+import unicodedata
 from difflib import SequenceMatcher
 from html import unescape
 from html.parser import HTMLParser
@@ -518,22 +519,21 @@ STOP_WORDS = {
     "in", "on", "at", "by", "a", "an",
 }
 
-
 def _normalize(value: str) -> str:
-
-    value = str(value or "").lower()
-
-    # Preserve Unicode letters and digits,
-    # including Hindi / Devanagari characters.
-    value = re.sub(
-        r"[^\w]+",
-        " ",
-        value,
-        flags=re.UNICODE,
+    value = unicodedata.normalize(
+        "NFC",
+        str(value or "").lower(),
     )
 
-    return " ".join(value.split())
+    # Preserve Unicode letters, numbers and combining marks.
+    normalized = "".join(
+        char
+        if unicodedata.category(char)[0] in {"L", "N", "M"}
+        else " "
+        for char in value
+    )
 
+    return " ".join(normalized.split())
 
 def _tokens(value: str) -> set[str]:
 
@@ -1189,6 +1189,7 @@ MAX_SITEMAP_URLS = 500
 MAX_GENERIC_CANDIDATES = 1
 
 
+
 def _generic_domains_for_claim(
     article: dict,
     claim: str,
@@ -1202,20 +1203,21 @@ def _generic_domains_for_claim(
 
     domains = []
 
+    # UPSC: require a specific UPSC-related reference.
     if any(word in text for word in (
         "upsc",
         "union public service",
         "civil services examination",
-        "à¤¸à¤¿à¤µà¤¿à¤² à¤¸à¥‡à¤µà¤¾",
-        "à¤¸à¤‚à¤˜ à¤²à¥‹à¤• à¤¸à¥‡à¤µà¤¾",
+        "संघ लोक सेवा आयोग",
+        "सिविल सेवा परीक्षा",
     )):
         domains.append("upsc.gov.in")
 
+    # BPSC: avoid routing every Bihar-related news item to BPSC.
     if any(word in text for word in (
         "bpsc",
         "bihar public service",
-        "à¤¬à¤¿à¤¹à¤¾à¤° à¤²à¥‹à¤• à¤¸à¥‡à¤µà¤¾",
-        "à¤¬à¤¿à¤¹à¤¾à¤°",
+        "बिहार लोक सेवा आयोग",
     )):
         domains.append("bpsc.bihar.gov.in")
 
@@ -1223,9 +1225,9 @@ def _generic_domains_for_claim(
         "education",
         "school",
         "university",
-        "à¤¶à¤¿à¤•à¥à¤·à¤¾",
-        "à¤µà¤¿à¤¦à¥à¤¯à¤¾à¤²à¤¯",
-        "à¤µà¤¿à¤¶à¥à¤µà¤µà¤¿à¤¦à¥à¤¯à¤¾à¤²à¤¯",
+        "शिक्षा",
+        "विद्यालय",
+        "विश्वविद्यालय",
     )):
         domains.append("education.gov.in")
 
@@ -1233,26 +1235,22 @@ def _generic_domains_for_claim(
         "home ministry",
         "home affairs",
         "security",
-        "à¤—à¥ƒà¤¹ à¤®à¤‚à¤¤à¥à¤°à¤¾à¤²à¤¯",
-        "à¤—à¥ƒà¤¹ à¤µà¤¿à¤­à¤¾à¤—",
+        "गृह मंत्रालय",
+        "गृह विभाग",
     )):
         domains.append("mha.gov.in")
 
     if any(word in text for word in (
         "prime minister",
         "cabinet",
-        "à¤ªà¥à¤°à¤§à¤¾à¤¨à¤®à¤‚à¤¤à¥à¤°à¥€",
-        "à¤®à¤‚à¤¤à¥à¤°à¤¿à¤®à¤‚à¤¡à¤²",
+        "प्रधानमंत्री",
+        "मंत्रिमंडल",
     )):
         domains.append("pmo.gov.in")
 
-    # General government information fallback.
-    if not domains:
-        domains.append("india.gov.in")
-
-    # Preserve order and remove duplicates.
+    # Never use a generic portal as an automatic fallback.
+    # Return no domain when the responsible authority is unknown.
     return tuple(dict.fromkeys(domains))
-
 
 async def _safe_get_sitemap(
     client: httpx.AsyncClient,
@@ -1634,7 +1632,7 @@ async def _resolve_generic_official_source(
                 "exam calendar" in search_text
                 or "examination calendar" in search_text
                 or "exam date" in search_text
-                or "\\u092a\\u0930\\u0940\\u0915\\u094d\\u0937\\u093e \\u0915\\u0948\\u0932\\u0947\\u0902\\u0921\\u0930" in search_text
+                or "परीक्षा कैलेंडर" in search_text
             )
 
             is_exam_calendar_page = (
