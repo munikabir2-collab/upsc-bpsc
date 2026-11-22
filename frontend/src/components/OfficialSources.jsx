@@ -57,6 +57,7 @@ function isSafeHttpsUrl(value) {
   }
 }
 
+
 function isOfficialGovernmentUrl(value) {
   if (!isSafeHttpsUrl(value)) return false;
 
@@ -67,7 +68,8 @@ function isOfficialGovernmentUrl(value) {
       hostname === "gov.in" ||
       hostname.endsWith(".gov.in") ||
       hostname === "nic.in" ||
-      hostname.endsWith(".nic.in")
+      hostname.endsWith(".nic.in") ||
+      hostname === "rbi.org.in"
     );
   } catch {
     return false;

@@ -13,3 +13,5 @@ razorpay
 groq
 
 psycopg[binary]
+
+pypdf

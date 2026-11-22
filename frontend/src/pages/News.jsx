@@ -2802,55 +2802,9 @@ return (
                                                 >
                                                     {t.readMcq}
                                                 </button>
-
-                                                {/* PUBLISHER SOURCE */}
-
-                                                {article.url && (
-                                                    <a
-                                                        href={article.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        style={{
-                                                            border: "1px solid #cbd5e1",
-                                                            color: "#334155",
-                                                            background: "#ffffff",
-                                                            borderRadius: 8,
-                                                            padding: "8px 12px",
-                                                            textDecoration: "none",
-                                                            fontWeight: 600,
-                                                        }}
-                                                    >
-                                                        {t.source}
-                                                    </a>
-                                                )}
-
-                                                {/* OFFICIAL GOVERNMENT SOURCE */}
-
-                                                {typeof article.official_source_url ===
-                                                    "string" &&
-                                                    /^https?:\/\//i.test(
-                                                        article.official_source_url.trim()
-                                                    ) && (
-                                                        <a
-                                                            href={article.official_source_url.trim()}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            style={{
-                                                                border: "1px solid #16a34a",
-                                                                color: "#166534",
-                                                                background: "#f0fdf4",
-                                                                borderRadius: 8,
-                                                                padding: "8px 12px",
-                                                                textDecoration: "none",
-                                                                fontWeight: 700,
-                                                            }}
-                                                        >
-                                                            {t.officialSource} ↗
-                                                        </a>
-                                                    )}
-                                            </div>
                                         </div>
                                     </div>
+                                </div>
                                 </div>
                             </article>
                         );
@@ -3148,25 +3102,8 @@ return (
                                     ? t.mcqLoading
                                     : t.generateMcq}
                             </button>
-
-                  {selectedArticle.url && (
-    <a href={selectedArticle.url} target="_blank" rel="noopener noreferrer">
-        {t.openSource}
-    </a>
-)}
-
-{typeof selectedArticle.official_source_url === "string" &&
-    /^https?:\/\//i.test(selectedArticle.official_source_url.trim()) && (
-        <a
-            href={selectedArticle.official_source_url.trim()}
-            target="_blank"
-            rel="noopener noreferrer"
-        >
-            {t.officialSource} ↗
-        </a>
-    )}
-
-                        </div>
+                            <ArticleSourceLinks article={selectedArticle} />
+</div>
 
                         {/* MCQ ERROR */}
 

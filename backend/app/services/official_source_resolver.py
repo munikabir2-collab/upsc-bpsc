@@ -1,10 +1,12 @@
-﻿
+
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import os
+from pypdf import PdfReader
 import re
 import xml.etree.ElementTree as ET
 import unicodedata
@@ -69,6 +71,11 @@ REQUEST_TIMEOUT = 20.0
 MAX_RESPONSE_BYTES = 2_000_000
 
 MAX_PAGE_CHARS = 4000
+MAX_GENERIC_PAGE_CHARS = 14000
+
+MAX_SCI_PDF_BYTES = 8_000_000
+
+MAX_SCI_PDF_PAGES = 12
 
 MAX_PIB_CANDIDATES = 2
 
@@ -228,7 +235,102 @@ async def _safe_get(
 
     return None
 
+async def _safe_get_sitemap(
+    client: httpx.AsyncClient,
+    url: str,
+) -> httpx.Response | None:
 
+    current_url = url
+
+    for _ in range(6):
+
+        if not _is_official_domain(current_url):
+            return None
+
+        parsed = urlparse(current_url)
+
+        if parsed.scheme != "https":
+            return None
+
+        if parsed.username or parsed.password:
+            return None
+
+        if parsed.port not in (None, 443):
+            return None
+
+        try:
+            response = await client.get(
+                current_url,
+                follow_redirects=False,
+            )
+
+        except httpx.HTTPError as exc:
+            logger.warning(
+                "Sitemap request failed: %s",
+                exc,
+            )
+            return None
+
+        if response.status_code in (
+            301, 302, 303, 307, 308
+        ):
+            location = response.headers.get("location")
+
+            if not location:
+                return None
+
+            next_url = urljoin(
+                str(response.url),
+                location,
+            )
+
+            if not _is_official_domain(next_url):
+                return None
+
+            current_url = next_url
+            continue
+
+        if response.status_code != 200:
+            return None
+
+        if len(response.content) > MAX_SITEMAP_BYTES:
+            logger.warning(
+                "Sitemap response too large"
+            )
+            return None
+
+        content_type = response.headers.get(
+            "content-type",
+            "",
+        ).lower()
+
+        body_start = response.content.lstrip()[:100].lower()
+
+        is_xml = (
+            "xml" in content_type
+            or body_start.startswith(b"<?xml")
+            or body_start.startswith(b"<urlset")
+            or body_start.startswith(b"<sitemapindex")
+        )
+
+        is_robots = (
+            parsed.path.lower().endswith("/robots.txt")
+            and (
+                "text/plain" in content_type
+                or "text/" in content_type
+            )
+        )
+
+        if not (is_xml or is_robots):
+            return None
+
+        return response
+
+    logger.warning(
+        "Too many redirects while fetching sitemap"
+    )
+
+    return None
 # ============================================================
 # JSON EXTRACTION
 # ============================================================
@@ -421,7 +523,45 @@ class _ArticleParser(HTMLParser):
         if not self.blocked:
             self.text_parts.append(value)
 
+class _SCIPDFLinkParser(HTMLParser):
 
+    def __init__(self):
+        super().__init__()
+        self.links = []
+        self.current_href = None
+        self.current_text = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() != "a":
+            return
+
+        attrs = dict(attrs)
+        href = attrs.get("href")
+
+        if href and self.current_href is None:
+            self.current_href = href
+            self.current_text = []
+
+    def handle_data(self, data):
+        if self.current_href is not None:
+            value = " ".join(str(data or "").split())
+            if value:
+                self.current_text.append(value)
+
+    def handle_endtag(self, tag):
+        if tag.lower() != "a" or self.current_href is None:
+            return
+
+        title = " ".join(self.current_text).strip()
+
+        if title:
+            self.links.append({
+                "title": title,
+                "url": self.current_href,
+            })
+
+        self.current_href = None
+        self.current_text = []
 
 class _PIBArticleParser(HTMLParser):
 
@@ -860,7 +1000,7 @@ async def _extract_claim(
     response = await client.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0,
-        max_completion_tokens=256,
+        max_completion_tokens=1024,
         reasoning_effort="low",
         include_reasoning=False,
         response_format={
@@ -873,10 +1013,13 @@ async def _extract_claim(
                     "Identify a specific factual claim about an "
                     "Indian government action, scheme, policy, "
                     "notification, institution or announcement. "
-                    "Return JSON with is_government_claim boolean "
-                    "and claim string. Do not invent facts. "
-                    "If no specific government claim exists, "
-                    "return false and an empty claim."
+                    "Return exactly one valid JSON object with these two keys: "
+                    "is_government_claim (boolean) and claim (string). "
+                    "Example: {\"is_government_claim\": true, \"claim\": \"...\"}. "
+                    "If no specific government claim exists, return "
+                    "{\"is_government_claim\": false, \"claim\": \"\"}. "
+                    "Do not include markdown, explanations, or extra keys. "
+                    "Do not invent facts."
                 ),
             },
             {
@@ -1124,7 +1267,7 @@ async def _verify_pib_article(
     result = await groq.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0,
-        max_completion_tokens=512,
+        max_completion_tokens=1024,
         reasoning_effort="low",
         include_reasoning=False,
         response_format={
@@ -1178,7 +1321,6 @@ async def _verify_pib_article(
 OFFICIAL_SITEMAP_DOMAINS = (
     "upsc.gov.in",
     "bpsc.bihar.gov.in",
-    "india.gov.in",
     "education.gov.in",
     "mha.gov.in",
     "pmo.gov.in",
@@ -1191,11 +1333,21 @@ OFFICIAL_SITEMAP_DOMAINS = (
 MAX_SITEMAP_BYTES = 2_000_000
 MAX_SITEMAP_FILES = 4
 MAX_SITEMAP_URLS = 500
-MAX_GENERIC_CANDIDATES = 1
+MAX_GENERIC_CANDIDATES = 5
 
 
 
 
+
+def _has_any(text: str, words) -> bool:
+    import re
+    for w in words:
+        if w.isascii():
+            if re.search(r"\b" + re.escape(w) + r"\b", text):
+                return True
+        elif w in text:
+            return True
+    return False
 def _generic_domains_for_claim(
     article: dict,
     claim: str,
@@ -1210,7 +1362,7 @@ def _generic_domains_for_claim(
     domains = []
 
     # UPSC
-    if any(word in text for word in (
+    if _has_any(text, (
         "upsc",
         "union public service",
         "civil services examination",
@@ -1220,7 +1372,7 @@ def _generic_domains_for_claim(
         domains.append("upsc.gov.in")
 
     # BPSC
-    if any(word in text for word in (
+    if _has_any(text, (
         "bpsc",
         "bihar public service",
         "बिहार लोक सेवा आयोग",
@@ -1228,7 +1380,7 @@ def _generic_domains_for_claim(
         domains.append("bpsc.bihar.gov.in")
 
     # CAG
-    if any(word in text for word in (
+    if _has_any(text, (
         "cag",
         "comptroller and auditor general",
         "comptroller auditor general",
@@ -1238,7 +1390,7 @@ def _generic_domains_for_claim(
         domains.append("cag.gov.in")
 
     # SEBI
-    if any(word in text for word in (
+    if _has_any(text, (
         "sebi",
         "securities and exchange board",
         "भारतीय प्रतिभूति और विनिमय बोर्ड",
@@ -1246,7 +1398,7 @@ def _generic_domains_for_claim(
         domains.append("sebi.gov.in")
 
     # RBI
-    if any(word in text for word in (
+    if _has_any(text, (
         "rbi",
         "reserve bank of india",
         "भारतीय रिजर्व बैंक",
@@ -1255,7 +1407,7 @@ def _generic_domains_for_claim(
         domains.append("rbi.org.in")
 
     # Supreme Court
-    if any(word in text for word in (
+    if _has_any(text, (
         "supreme court of india",
         "supreme court",
         "भारत का सर्वोच्च न्यायालय",
@@ -1264,7 +1416,7 @@ def _generic_domains_for_claim(
         domains.append("sci.gov.in")
 
     # Education
-    if any(word in text for word in (
+    if _has_any(text, (
         "education",
         "school",
         "university",
@@ -1275,7 +1427,7 @@ def _generic_domains_for_claim(
         domains.append("education.gov.in")
 
     # Home Ministry
-    if any(word in text for word in (
+    if _has_any(text, (
         "home ministry",
         "home affairs",
         "security",
@@ -1285,7 +1437,7 @@ def _generic_domains_for_claim(
         domains.append("mha.gov.in")
 
     # Prime Minister / Cabinet
-    if any(word in text for word in (
+    if _has_any(text, (
         "prime minister",
         "cabinet",
         "प्रधानमंत्री",
@@ -1344,8 +1496,40 @@ async def _discover_official_sitemap_urls(
     client: httpx.AsyncClient,
     domain: str,
 ) -> list[str]:
+    for host in (f"www.{domain}", domain):
+        urls = await _discover_official_sitemap_urls_for_host(
+            client,
+            domain,
+            host,
+        )
+        if urls:
+            return urls
+    return []
 
-    base_url = f"https://{domain}/"
+
+async def _discover_official_sitemap_urls_for_host(
+    client: httpx.AsyncClient,
+    domain: str,
+    host: str,
+) -> list[str]:
+
+    base_url = f"https://{host}/"
+
+    def belongs_to_domain(url: str) -> bool:
+
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+
+        return (
+            parsed.scheme == "https"
+            and not parsed.username
+            and not parsed.password
+            and parsed.port in (None, 443)
+            and (
+                host == domain
+                or host.endswith("." + domain)
+            )
+        )
 
     sitemap_queue = []
     discovered_pages = []
@@ -1364,7 +1548,7 @@ async def _discover_official_sitemap_urls(
 
                 sitemap_url = line.split(":", 1)[1].strip()
 
-                if _is_official_domain(sitemap_url):
+                if belongs_to_domain(sitemap_url):
                     sitemap_queue.append(sitemap_url)
 
     # Standard sitemap locations.
@@ -1403,18 +1587,29 @@ async def _discover_official_sitemap_urls(
         for nested_url in nested:
 
             if (
-                nested_url not in visited_sitemaps
+                belongs_to_domain(nested_url)
+                and nested_url not in visited_sitemaps
                 and len(visited_sitemaps)
                 + len(sitemap_queue)
                 < MAX_SITEMAP_FILES
             ):
                 sitemap_queue.append(nested_url)
 
-        discovered_pages.extend(pages)
+        remaining = MAX_SITEMAP_URLS - len(discovered_pages)
+
+        if remaining > 0:
+            for page_url in pages:
+                if belongs_to_domain(page_url):
+                    discovered_pages.append(page_url)
+
+                    if len(discovered_pages) >= MAX_SITEMAP_URLS:
+                        break
+
     # Only URLs belonging to the domain being searched.
     result = []
 
     for url in discovered_pages:
+
         parsed_url = urlparse(url)
         host = (parsed_url.hostname or "").lower()
         path = parsed_url.path.lower()
@@ -1443,12 +1638,15 @@ async def _discover_official_sitemap_urls(
         if path.endswith(blocked_extensions):
             continue
 
+        # Reject homepage and root URLs.
+        if path in ("", "/"):
+            continue
+
+        # Accept only pages from the searched official domain.
         if host == domain or host.endswith("." + domain):
             result.append(url)
 
     return list(dict.fromkeys(result))[:MAX_SITEMAP_URLS]
-
-
 async def _fetch_generic_official_page(
     client: httpx.AsyncClient,
     url: str,
@@ -1460,6 +1658,23 @@ async def _fetch_generic_official_page(
     )
 
     if response is None:
+        return None
+
+    # Validate the final URL after redirects.
+    final_url = str(response.url)
+
+    if not _is_official_domain(final_url):
+        return None
+
+    parsed_url = urlparse(final_url)
+
+    if parsed_url.scheme != "https":
+        return None
+
+    if parsed_url.username or parsed_url.password:
+        return None
+
+    if parsed_url.port not in (None, 443):
         return None
 
     parser = _ArticleParser()
@@ -1476,16 +1691,72 @@ async def _fetch_generic_official_page(
     title = " ".join(parser.title_parts).strip()
     body = " ".join(parser.text_parts).strip()
 
-    if not title or len(body) < 100:
+    if not title or len(body) < 200:
+        return None
+
+    # Reject pages with generic or missing titles.
+    normalized_title = _normalize(title)
+
+    if normalized_title in (
+        "",
+        "home",
+        "homepage",
+        "welcome",
+        "official website",
+        "government of india",
+    ):
         return None
 
     content = (
         f"Official page title: {title}\n"
-        f"Official page URL: {response.url}\n"
+        f"Official page URL: {final_url}\n"
         f"Official page content:\n{body[:MAX_PAGE_CHARS]}"
     )
 
-    return str(response.url), content
+    return final_url, content
+
+
+def _relevant_excerpt(
+    page_text: str,
+    claim: str,
+    limit: int,
+) -> str:
+    """Keep the page header, then the paragraphs most relevant to the claim."""
+
+    if len(page_text) <= limit:
+        return page_text
+
+    head = page_text[:1500]
+    rest = page_text[1500:]
+
+    words = {
+        w for w in re.findall(r"[a-z0-9]{4,}", claim.lower())
+    }
+
+    paragraphs = [
+        para.strip()
+        for para in re.split(r"\n\s*\n|(?<=\.)\s*\n", rest)
+        if para.strip()
+    ]
+
+    scored = []
+    for index, para in enumerate(paragraphs):
+        low = para.lower()
+        score = sum(1 for w in words if w in low)
+        scored.append((score, index, para))
+
+    budget = limit - len(head) - 50
+    chosen = []
+
+    for score, index, para in sorted(scored, key=lambda t: (-t[0], t[1])):
+        if score == 0 or budget <= 0:
+            break
+        chosen.append((index, para[:900]))
+        budget -= len(para[:900]) + 2
+
+    chosen.sort()
+
+    return head + "\n...\n" + "\n\n".join(t for _, t in chosen)
 
 
 async def _verify_generic_official_page(
@@ -1494,28 +1765,53 @@ async def _verify_generic_official_page(
     page_content: str,
 ) -> bool:
 
+    # Basic evidence checks before using AI.
+    if not claim or len(claim.strip()) < 20:
+        return False
+
+    if not page_content or len(page_content.strip()) < 200:
+        return False
+
+    page_text = page_content.strip()
+
+    # The page must contain a real title and its official URL.
+    if "Official page title:" not in page_text:
+        return False
+
+    if "Official page URL:" not in page_text:
+        return False
+
     groq = await _get_groq_client()
 
     result = await groq.chat.completions.create(
         model=GROQ_MODEL,
         temperature=0,
-        max_completion_tokens=256,
+        max_completion_tokens=700,
         reasoning_effort="low",
         include_reasoning=False,
-        response_format={
-            "type": "json_object"
-        },
         messages=[
             {
                 "role": "system",
                 "content": (
                     "You are a strict Indian government source verifier. "
-                    "Determine whether the supplied official government "
-                    "page directly supports the exact factual claim in "
-                    "the news article. A shared topic, ministry, person, "
-                    "or keyword is not sufficient. Do not infer missing "
-                    "facts. If the evidence is incomplete, unrelated, "
-                    "or ambiguous, return matches false. "
+                    "Your task is to verify whether an official government "
+                    "webpage provides direct evidence for the exact factual "
+                    "claim in a news article. "
+                    "A shared topic, ministry, person, department, or "
+                    "keyword is NOT evidence. "
+                    "Check whether the page itself supports the specific "
+                    "event, announcement, decision, order, report, date, "
+                    "or numerical fact stated in the claim. "
+                    "Do not use outside knowledge. "
+                    "Do not assume that a page is relevant merely because "
+                    "it belongs to the correct government department. "
+                    "If the page is a homepage, general information page, "
+                    "unrelated notice, search result, or does not contain "
+                    "direct supporting evidence, return matches false. "
+                    "A consultation paper, draft or proposal published by the official body counts as direct evidence for a news claim that reports that proposal, even if the news wording says plans, proposes or introduced. "
+                    "Ignore small wording differences in verbs and job titles; check the subject, the institution and the key figures. "
+                    "If any important part of the claim is unsupported, "
+                    "return matches false. "
                     'Return JSON only: {"matches": true} or '
                     '{"matches": false}.'
                 ),
@@ -1534,7 +1830,7 @@ async def _verify_generic_official_page(
                     + "\n\nEXTRACTED GOVERNMENT CLAIM:\n"
                     + claim[:1500]
                     + "\n\nOFFICIAL GOVERNMENT PAGE:\n"
-                    + page_content[:MAX_PAGE_CHARS]
+                    + _relevant_excerpt(page_text, claim, MAX_GENERIC_PAGE_CHARS)
                 ),
             },
         ],
@@ -1543,11 +1839,387 @@ async def _verify_generic_official_page(
     if not result.choices:
         return False
 
-    data = _extract_json(
-        result.choices[0].message.content or "{}"
+    raw = (result.choices[0].message.content or "").lower()
+
+    # Plain-text parse: JSON mode is off, so look for the verdict.
+    if re.search(r'"matches"\s*:\s*true', raw):
+        return True
+
+    return False
+
+
+async def _safe_get_sci_pdf(
+    client: httpx.AsyncClient,
+    url: str,
+) -> tuple[str, bytes] | None:
+
+    current_url = url
+    parsed = urlparse(current_url)
+
+    # Convert SCI HTML PDF viewer URL to actual PDF endpoint.
+    if parsed.path.rstrip("/") == "/view-pdf":
+        current_url = parsed._replace(
+            path="/sci-get-pdf/"
+        ).geturl()
+
+    for _ in range(6):
+
+        if not _is_official_domain(current_url):
+            return None
+
+        parsed = urlparse(current_url)
+
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in (
+                "sci.gov.in",
+                "www.sci.gov.in",
+            )
+            or parsed.port not in (None, 443)
+            or parsed.username
+            or parsed.password
+            or parsed.path.rstrip("/") != "/sci-get-pdf"
+        ):
+            return None
+
+        response = await client.get(
+            current_url,
+            follow_redirects=False,
+        )
+
+        if response.status_code in (301, 302, 303, 307, 308):
+            location = response.headers.get("location")
+
+            if not location:
+                return None
+
+            current_url = urljoin(
+                str(response.url),
+                location,
+            )
+            continue
+
+        response.raise_for_status()
+
+        if len(response.content) > MAX_SCI_PDF_BYTES:
+            logger.warning("Supreme Court PDF too large")
+            return None
+
+        pdf_start = response.content[:1024].lstrip()
+
+        if not pdf_start.startswith(b"%PDF-"):
+            logger.warning(
+                "Supreme Court endpoint did not return a PDF: %s",
+                current_url,
+            )
+            return None
+
+        return str(response.url), response.content
+
+    logger.warning("Too many redirects while fetching SCI PDF")
+    return None
+
+async def _resolve_sci_pdf_source(
+    client: httpx.AsyncClient,
+    article: dict,
+    claim: str,
+) -> str | None:
+
+    homepage_url = "https://www.sci.gov.in/"
+
+    homepage = await _safe_get(
+        client,
+        homepage_url,
     )
 
-    return data.get("matches") is True
+    if homepage is None:
+        logger.warning("Supreme Court homepage fetch failed")
+        return None
+
+    parser = _SCIPDFLinkParser()
+    parser.feed(homepage.text[:MAX_RESPONSE_BYTES])
+
+    candidates = []
+
+    article_title = str(article.get("title") or "")
+
+    for item in parser.links:
+
+        pdf_url = urljoin(
+            str(homepage.url),
+            item["url"],
+        )
+
+        parsed = urlparse(pdf_url)
+
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in (
+                "sci.gov.in",
+                "www.sci.gov.in",
+            )
+            or parsed.path.rstrip("/") != "/view-pdf"
+            or not _is_official_domain(pdf_url)
+        ):
+            continue
+
+        title = item["title"]
+
+        score = max(
+            _title_score(article_title, title),
+            _title_score(claim, title),
+        )
+
+        if score >= 0.12:
+            candidates.append({
+                "url": pdf_url,
+                "title": title,
+                "score": score,
+            })
+
+    candidates.sort(
+        key=lambda item: item["score"],
+        reverse=True,
+    )
+
+    candidates = candidates[:MAX_GENERIC_CANDIDATES]
+
+    logger.info(
+        "Supreme Court PDF candidates shortlisted: %s",
+        len(candidates),
+    )
+
+    for candidate in candidates:
+
+        logger.info(
+            "Checking Supreme Court PDF: %s",
+            candidate["url"],
+        )
+
+        result = await _safe_get_sci_pdf(
+            client,
+            candidate["url"],
+        )
+
+        if result is None:
+            continue
+
+        pdf_url, pdf_bytes = result
+
+        try:
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+
+            if reader.is_encrypted:
+                logger.info("Skipping encrypted SCI PDF")
+                continue
+
+            page_text = []
+
+            for page in reader.pages[:MAX_SCI_PDF_PAGES]:
+                text = page.extract_text() or ""
+
+                if text.strip():
+                    page_text.append(text)
+
+            extracted_text = "\n".join(page_text).strip()
+
+        except Exception:
+            logger.exception(
+                "Supreme Court PDF text extraction failed"
+            )
+            continue
+
+        if len(extracted_text) < 200:
+            logger.info(
+                "SCI PDF has insufficient extractable text: %s",
+                pdf_url,
+            )
+            continue
+
+        page_content = (
+            "Official page title: "
+            + candidate["title"]
+            + "\nOfficial page URL: "
+            + pdf_url
+            + "\nOfficial page content:\n"
+            + extracted_text[:MAX_PAGE_CHARS]
+        )
+
+        matched = await _verify_generic_official_page(
+            article=article,
+            claim=claim,
+            page_content=page_content,
+        )
+
+        logger.info(
+            "Supreme Court PDF verification: matched=%s url=%s",
+            matched,
+            pdf_url,
+        )
+
+        if matched:
+            logger.info(
+                "Verified Supreme Court PDF source: %s",
+                pdf_url,
+            )
+            return pdf_url
+
+    return None
+
+OFFICIAL_LISTING_PAGES = {
+    "sebi.gov.in": (
+        "https://" + "www." + "sebi.gov.in"
+        + "/sebiweb/home/HomeAction.do?doListingAll=yes",
+    ),
+}
+
+LISTING_PATH_HINTS = (
+    "/media-and-notifications/",
+    "/legal/",
+    "/reports-and-statistics/",
+)
+
+
+async def _discover_listing_urls(
+    client: httpx.AsyncClient,
+    domain: str,
+) -> list[str]:
+    """Collect recent item links from an official listing page."""
+
+    found: list[str] = []
+
+    for page_url in OFFICIAL_LISTING_PAGES.get(domain, ()):
+
+        response = await _safe_get(client, page_url)
+
+        if response is None:
+            logger.info("Listing page fetch failed: %s", page_url)
+            continue
+
+        for href in re.findall(
+            r'href="([^"]+\.html)"',
+            response.text[:MAX_RESPONSE_BYTES],
+        ):
+            full = urljoin(page_url, href)
+            parsed = urlparse(full)
+            host = (parsed.hostname or "").lower()
+
+            if (
+                parsed.scheme == "https"
+                and (host == domain or host.endswith("." + domain))
+                and any(h in parsed.path for h in LISTING_PATH_HINTS)
+                and full not in found
+            ):
+                found.append(full)
+
+    logger.info(
+        "Listing discovery: domain=%s items=%s", domain, len(found)
+    )
+    return found[:200]
+
+
+async def _append_linked_pdf_text(
+    client: httpx.AsyncClient,
+    page_url: str,
+    page_content: str,
+) -> str:
+    """Append text of a PDF embedded via a viewer link (web/?file=...pdf)."""
+
+    try:
+        response = await _safe_get(client, page_url)
+
+        if response is None:
+            return page_content
+
+        match = re.search(
+            r"file=(https?://[^'\"&\s]+\.pdf)",
+            response.text[:MAX_RESPONSE_BYTES],
+        )
+
+        if not match:
+            return page_content
+
+        current = match.group(1)
+        pdf_bytes = None
+
+        for _ in range(3):
+
+            if not _is_official_domain(current):
+                return page_content
+
+            pdf_response = await client.get(current)
+
+            if pdf_response.is_redirect:
+                location = pdf_response.headers.get("location")
+                if not location:
+                    return page_content
+                current = urljoin(current, location)
+                continue
+
+            if pdf_response.status_code != 200:
+                return page_content
+
+            pdf_bytes = pdf_response.content
+            break
+
+        if (
+            not pdf_bytes
+            or len(pdf_bytes) > 15_000_000
+            or not pdf_bytes[:1024].lstrip().startswith(b"%PDF-")
+        ):
+            return page_content
+
+        def _extract() -> str:
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+            return "\n".join(
+                (pg.extract_text() or "")
+                for pg in reader.pages[:25]
+            )
+
+        text = (await asyncio.to_thread(_extract)).strip()
+
+        if not text:
+            return page_content
+
+        logger.info(
+            "Linked PDF text appended: %s chars=%s",
+            current,
+            len(text),
+        )
+
+        return (
+            page_content
+            + "\n\nLinked official PDF text:\n"
+            + text[:60000]
+        )
+
+    except Exception:
+        logger.warning(
+            "Linked PDF extraction failed: %s",
+            page_url,
+            exc_info=True,
+        )
+        return page_content
+
+
+def _is_recent_dated_url(url: str, max_days: int = 100) -> bool:
+    """True when the path has /mmm-yyyy/ and that month is recent."""
+
+    from datetime import datetime
+
+    months = "jan feb mar apr may jun jul aug sep oct nov dec".split()
+    match = re.search(
+        r"/(" + "|".join(months) + r")-(\d{4})/",
+        urlparse(url).path.lower(),
+    )
+
+    if not match:
+        return False
+
+    month = months.index(match.group(1)) + 1
+    item_date = datetime(int(match.group(2)), month, 1)
+
+    return (datetime.utcnow() - item_date).days <= max_days
 
 
 async def _resolve_generic_official_source(
@@ -1565,33 +2237,73 @@ async def _resolve_generic_official_source(
         article.get("title") or ""
     )
 
+    logger.info(
+        "Generic source domains selected: %s",
+        domains,
+    )
+
+    if not domains:
+        logger.info(
+            "No official domain matched the article"
+        )
+        return None
+
     candidates = []
 
     for domain in domains:
+        if domain == "sci.gov.in":
 
+            sci_source = await _resolve_sci_pdf_source(
+                client=client,
+                article=article,
+                claim=claim,
+            )
+
+            if sci_source:
+                return sci_source
+
+            logger.info(
+                "No verified Supreme Court PDF source found"
+            )
+            continue
         urls = await _discover_official_sitemap_urls(
             client,
             domain,
         )
+        urls = list(dict.fromkeys(
+            list(await _discover_listing_urls(client, domain)) + list(urls)
+        ))
+
+        logger.info(
+            "Official sitemap discovery: domain=%s pages=%s",
+            domain,
+            len(urls),
+        )
 
         for url in urls:
 
-            path_text = urlparse(url).path.replace(
-                "/", " "
-            ).replace("-", " ").replace("_", " ")
+            if (
+                domain in OFFICIAL_LISTING_PAGES
+                and not _is_recent_dated_url(url)
+            ):
+                continue
 
+            path_text = (
+                urlparse(url).path
+                .replace("/", " ")
+                .replace("-", " ")
+                .replace("_", " ")
+            )
 
             score = max(
                 _title_score(article_title, path_text),
                 _title_score(claim, path_text),
             )
 
-            # Prioritize official exam-calendar pages
-            # for exam-date and calendar-related news.
             search_text = (
-                article_title + " " +
-                claim + " " +
-                str(
+                article_title + " "
+                + claim + " "
+                + str(
                     article.get("description")
                     or article.get("content")
                     or ""
@@ -1610,14 +2322,13 @@ async def _resolve_generic_official_source(
                 or "exam calendar" in path_text.lower()
             )
 
-            if is_exam_calendar_news and is_exam_calendar_page:
+            if (
+                is_exam_calendar_news
+                and is_exam_calendar_page
+            ):
                 score += 1.0
 
-
-            # URL slug is only used to shortlist pages.
-            # Final verification always uses page content.
             if score >= 0.12:
-
                 candidates.append({
                     "url": url,
                     "score": score,
@@ -1630,7 +2341,17 @@ async def _resolve_generic_official_source(
 
     candidates = candidates[:MAX_GENERIC_CANDIDATES]
 
+    logger.info(
+        "Generic official candidates shortlisted: %s",
+        len(candidates),
+    )
+
     for candidate in candidates:
+
+        logger.info(
+            "Checking official candidate: %s",
+            candidate["url"],
+        )
 
         page = await _fetch_generic_official_page(
             client,
@@ -1638,6 +2359,10 @@ async def _resolve_generic_official_source(
         )
 
         if page is None:
+            logger.info(
+                "Official candidate page fetch failed: %s",
+                candidate["url"],
+            )
             continue
 
         official_url, page_content = page
@@ -1645,19 +2370,39 @@ async def _resolve_generic_official_source(
         if not _is_official_domain(official_url):
             continue
 
-        matched = await _verify_generic_official_page(
-            article=article,
-            claim=claim,
-            page_content=page_content,
+        page_content = await _append_linked_pdf_text(
+            client,
+            official_url,
+            page_content,
+        )
+
+        try:
+            matched = await _verify_generic_official_page(
+                article=article,
+                claim=claim,
+                page_content=page_content,
+            )
+        except RateLimitError:
+            raise
+        except Exception:
+            logger.warning(
+                "Generic verification failed; skipping candidate: %s",
+                official_url,
+                exc_info=True,
+            )
+            continue
+
+        logger.info(
+            "Official candidate verification: matched=%s url=%s",
+            matched,
+            official_url,
         )
 
         if matched:
-
             logger.info(
                 "Verified generic government source: %s",
                 official_url,
             )
-
             return official_url
 
     logger.info(
@@ -1841,6 +2586,7 @@ async def resolve_official_source(
         )
 
         return None
+
 
     except RateLimitError:
         logger.warning(
