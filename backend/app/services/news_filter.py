@@ -2400,6 +2400,61 @@ def _matches_language(
 # FILTER NEWS
 # ============================================================
 
+BLOCKED_SOURCE_DOMAINS = ("rlsbb.cc", "fazlisyam.com")
+
+PROMO_TITLE_PATTERNS = (
+    "price in india",
+    "prices in india",
+    "top models, features and prices",
+)
+
+_MALAY_WORDS = {
+    "yang", "dan", "untuk", "dengan", "adalah", "dalam", "pada",
+    "tidak", "ialah", "daripada", "boleh", "kepada", "tanaman",
+    "hasil", "pengenalan", "ini", "itu", "dari", "akan",
+}
+
+_ENGLISH_STOPWORDS = {
+    "the", "of", "and", "to", "in", "is", "for", "on", "that", "with",
+    "as", "by", "at", "from", "has", "have", "will", "says",
+}
+
+
+def is_acceptable_article(article: dict) -> bool:
+    """Reject blocked sites, product promos and non-English/Hindi text."""
+
+    url = str(article.get("url") or "").lower()
+    source = str(article.get("source") or "").lower()
+    title = str(article.get("title") or "")
+    body = title + " " + str(article.get("description") or "")
+
+    if any(d in url or d in source for d in BLOCKED_SOURCE_DOMAINS):
+        return False
+
+    if any(p in title.lower() for p in PROMO_TITLE_PATTERNS):
+        return False
+
+    letters = re.findall(r"[A-Za-z\u0900-\u097F]", body)
+    if len(letters) < 20:
+        return False
+
+    devanagari = sum(1 for c in letters if "\u0900" <= c <= "\u097F")
+    if devanagari / len(letters) >= 0.5:
+        return True
+
+    words = re.findall(r"[a-z]+", body.lower()[:400])
+    english = sum(1 for w in words if w in _ENGLISH_STOPWORDS)
+    malay = sum(1 for w in words if w in _MALAY_WORDS)
+
+    # Reject only when the text looks Malay/Indonesian, or is long
+    # with no English function words at all.
+    if malay >= 3 and malay > english:
+        return False
+    if len(words) >= 25 and english == 0:
+        return False
+    return True
+
+
 def filter_news(
     articles: list[dict[str, Any]],
     min_score: int = MIN_ACCEPT_SCORE,
@@ -2433,6 +2488,9 @@ def filter_news(
             original_article,
             dict,
         ):
+            continue
+
+        if not is_acceptable_article(original_article):
             continue
 
         # ----------------------------------------------------
