@@ -39,7 +39,19 @@ const linkStyle = {
   textDecoration: "underline",
   wordBreak: "break-all",
 };
+const detailsStyle = {
+  marginTop: 8,
+  padding: "8px 10px",
+  background: "rgba(255,255,255,0.65)",
+  border: "1px solid #ead49c",
+  borderRadius: 7,
+};
 
+const summaryStyle = {
+  cursor: "pointer",
+  fontWeight: 600,
+  color: "#594300",
+};
 function isSafeHttpsUrl(value) {
   if (!value || typeof value !== "string") return false;
 
@@ -91,32 +103,64 @@ function ExternalLink({ href, children }) {
   );
 }
 
+
 export function DisclaimerBanner() {
   return (
     <div style={boxStyle} role="note">
-      <strong>Important Disclaimer:</strong>{" "}
-      This is an independent educational application. It is not affiliated
-      with, endorsed by, or officially connected to UPSC, BPSC, PIB, or any
-      government department or organisation. It does not represent a
-      government entity.
+      <strong>Important Disclaimer / महत्वपूर्ण सूचना:</strong>
 
-      Government-related information should always be checked against the
-      original source published by the relevant government authority.
-
-      <br />
-
-      <strong>महत्वपूर्ण सूचना:</strong>{" "}
-      यह एक स्वतंत्र शैक्षणिक ऐप है। इसका UPSC, BPSC, PIB या किसी सरकारी
-      विभाग अथवा संस्था से कोई आधिकारिक संबंध या संबद्धता नहीं है।
-      यह किसी सरकारी निकाय का प्रतिनिधित्व नहीं करता।
-
-      सरकारी जानकारी की पुष्टि संबंधित सरकारी प्राधिकरण द्वारा प्रकाशित
-      मूल स्रोत से अवश्य करें।
-
-      <div style={{ marginTop: 8 }}>
-        <strong>Official Government Portals / आधिकारिक सरकारी पोर्टल:</strong>
-        <OfficialSourcesList compact />
+      <div style={{ marginTop: 4 }}>
+        Muni48 is an independent educational platform. It is not
+        affiliated with UPSC, BPSC or any government body.
       </div>
+
+      <div style={{ marginTop: 4 }}>
+        Muni48 एक स्वतंत्र शैक्षणिक प्लेटफॉर्म है। इसका UPSC, BPSC
+        या किसी सरकारी संस्था से आधिकारिक संबंध नहीं है।
+      </div>
+
+      <details style={detailsStyle}>
+        <summary style={summaryStyle}>
+          Read full disclaimer / पूरी सूचना पढ़ें
+        </summary>
+
+        <div style={{ marginTop: 8 }}>
+          <strong>Important Disclaimer:</strong>
+          <p>
+            This is an independent educational application. It is not
+            affiliated with, endorsed by, or officially connected to
+            UPSC, BPSC, PIB, or any government department or organisation.
+            It does not represent a government entity.
+          </p>
+          <p>
+            Government-related information should always be checked
+            against the original source published by the relevant
+            government authority.
+          </p>
+
+          <strong>महत्वपूर्ण सूचना:</strong>
+          <p>
+            यह एक स्वतंत्र शैक्षणिक ऐप है। इसका UPSC, BPSC, PIB या
+            किसी सरकारी विभाग अथवा संस्था से कोई आधिकारिक संबंध या
+            संबद्धता नहीं है। यह किसी सरकारी निकाय का प्रतिनिधित्व
+            नहीं करता।
+          </p>
+          <p>
+            सरकारी जानकारी की पुष्टि संबंधित सरकारी प्राधिकरण द्वारा
+            प्रकाशित मूल स्रोत से अवश्य करें।
+          </p>
+        </div>
+      </details>
+
+      <details style={detailsStyle}>
+        <summary style={summaryStyle}>
+          Official Government Portals / आधिकारिक सरकारी पोर्टल
+        </summary>
+
+        <div style={{ marginTop: 8 }}>
+          <OfficialSourcesList compact />
+        </div>
+      </details>
     </div>
   );
 }
