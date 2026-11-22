@@ -2400,7 +2400,11 @@ def _matches_language(
 # FILTER NEWS
 # ============================================================
 
-BLOCKED_SOURCE_DOMAINS = ("rlsbb.cc", "fazlisyam.com")
+BLOCKED_SOURCE_DOMAINS = (
+    "rlsbb.cc", "fazlisyam.com", "fedorapeople.org",
+    "caribbeanetroundup.com", "hoticeglobal.com", "archdaily.com",
+    "punchng.com", "commondreams.org",
+)
 
 PROMO_TITLE_PATTERNS = (
     "price in india",
