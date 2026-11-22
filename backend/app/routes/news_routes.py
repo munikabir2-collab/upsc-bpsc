@@ -1766,7 +1766,7 @@ async def _search_news_internal(
     saved_articles = []
 
     official_source_checks = 0
-    max_official_source_checks = 1
+    max_official_source_checks = 0
 
     for article in paginated:
 

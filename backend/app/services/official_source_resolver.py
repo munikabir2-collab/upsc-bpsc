@@ -914,6 +914,26 @@ def _get_prid(url: str) -> str | None:
 # Keep the best language/title for each PRID.
 # ============================================================
 
+_GENERIC_TITLE_WORDS = {
+    "india", "indian", "prime", "minister", "ministry", "government",
+    "govt", "union", "centre", "central", "state", "national", "says",
+    "new", "announces", "launches", "holds", "hold", "visit", "meeting",
+    "for", "the", "and", "with", "from", "that", "this", "over", "after",
+    "may", "will", "plans", "seeks", "talks",
+    "defence", "defense", "technology", "economy", "trade",
+    "policy", "scheme", "sector", "growth", "report",
+}
+
+
+def _shares_specific_word(a: str, b: str) -> bool:
+    def words(t):
+        return {
+            w for w in re.findall(r"[a-z0-9]{4,}", t.lower())
+            if w not in _GENERIC_TITLE_WORDS
+        }
+    return len(words(a) & words(b)) >= 2
+
+
 def _rank_releases(
     article_title: str,
     releases: list[dict],
@@ -945,6 +965,9 @@ def _rank_releases(
         )
 
         if score < MIN_TITLE_SCORE:
+            continue
+
+        if not _shares_specific_word(article_title, title):
             continue
 
         candidate = {
