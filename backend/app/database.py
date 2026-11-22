@@ -90,6 +90,7 @@ def add_official_source_url_column():
     additions = {
         "official_source_url": "VARCHAR(1000)",
         "official_source_checked_at": "TIMESTAMP",
+        "official_social_source_url": "VARCHAR(1000)",
     }
 
     with engine.begin() as connection:

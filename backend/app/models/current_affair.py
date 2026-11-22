@@ -60,6 +60,10 @@ class CurrentAffair(Base):
         DateTime,
         nullable=True,
     )
+    official_social_source_url = Column(
+        String(1000),
+        nullable=True,
+    )
     source = Column(
         String(200),
         nullable=True,

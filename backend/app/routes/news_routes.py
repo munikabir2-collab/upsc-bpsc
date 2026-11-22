@@ -927,6 +927,12 @@ def article_to_dict(
             )
             or None
         ),
+        "official_social_source_url": (
+            _clean_text(
+                article.official_social_source_url
+            )
+            or None
+        ),
         "source": (
             _clean_text(
                 article.source
@@ -1105,6 +1111,17 @@ def _upsert_current_affair(
             article.get("official_source_checked_at")
         ),
 
+        # Never trust an incoming social URL.
+        # Reuse only a previously verified database value.
+        "official_social_source_url": (
+            _clean_text(
+                existing.official_social_source_url
+            )
+            or None
+            if existing
+            else None
+        ),
+
         "source":
             _clean_text(
                 article.get("source"),
@@ -1266,6 +1283,7 @@ def _upsert_current_affair(
                     "title",
                     "official_source_url",
                     "official_source_checked_at",
+                    "official_social_source_url",
                 }
                 and not value
             ):
@@ -1772,6 +1790,17 @@ async def _search_news_internal(
                     .filter(CurrentAffair.url == article_url)
                     .first()
                 )
+
+            # Reuse only previously stored social URL.
+            # Incoming feed data is never trusted for this field.
+            article["official_social_source_url"] = (
+                _clean_text(
+                    existing_source_record.official_social_source_url
+                )
+                or None
+                if existing_source_record
+                else None
+            )
 
             # Reuse a previously verified official URL.
             if (
