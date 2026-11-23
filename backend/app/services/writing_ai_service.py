@@ -895,7 +895,7 @@ def _call_groq(
             # QWEN REASONING CONTROL
             # ------------------------------------------------
 
-            "reasoning_effort": "none",
+            "reasoning_effort": "low",
 
             "reasoning_format": "hidden",
         }
@@ -912,7 +912,7 @@ def _call_groq(
 
         logger.info(
             "Groq request | model=%s | json=%s | "
-            "reasoning_effort=none | attempt=%s/%s | "
+            "reasoning_effort=low | attempt=%s/%s | "
             "tokens=%s",
             GROQ_MODEL,
             json_mode,
